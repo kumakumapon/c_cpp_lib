@@ -14,14 +14,16 @@ c_cpp_lib/
 ├── libs/                       # 独立したライブラリ群
 │   ├── CMakeLists.txt          # 各ライブラリの自動読み込み設定
 │   ├── embed_heap/             # 組み込み向け静的ヒープメモリアロケータ ([仕様・使い方ドキュメント](libs/embed_heap/README.md))
+│   ├── uitron/                 # μITRON 4.0 仕様準拠 RTOS API ライブラリ ([仕様・使い方ドキュメント](libs/uitron/README.md))
 │   │   ├── CMakeLists.txt
-│   │   ├── include/embed_heap/ (embed_heap.h, embed_heap.hpp)
-│   │   ├── src/embed_heap.c
+│   │   ├── include/uitron/ (itron.h, kernel.h, uitron_os.h)
+│   │   ├── src/
 │   │   └── tests/
 │   └── sample_math/            # サンプルライブラリ（数学ユーティリティ）
 ├── apps/                       # 独立したアプリケーション群
 │   ├── CMakeLists.txt          # 各アプリの自動読み込み設定
 │   ├── embed_heap_demo/        # embed_heapのデモアプリ
+│   ├── uitron_demo/            # μITRON 4.0 APIのデモアプリ
 │   └── cli_demo/               # サンプルCLIアプリケーション
 └── README.md
 ```
