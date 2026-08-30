@@ -104,9 +104,6 @@ ER trcv_mbx(ID mbxid, T_MSG **ppk_msg, TMO tmout) {
     MCB *mcb = &g_kcb.mcbs[mbxid];
     if (!mcb->is_created) return E_NOEXS;
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
-    if (!cur) return E_CTX;
-
     if (mcb->head) {
         *ppk_msg = mcb->head;
         mcb->head = mcb->head->next;
@@ -119,6 +116,9 @@ ER trcv_mbx(ID mbxid, T_MSG **ppk_msg, TMO tmout) {
     if (tmout == TMO_POL) {
         return E_TMOUT;
     }
+
+    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    if (!cur) return E_CTX;
 
     cur->ppk_msg = ppk_msg;
     uitron_task_wait(cur, TTW_MBX, mbxid, tmout);

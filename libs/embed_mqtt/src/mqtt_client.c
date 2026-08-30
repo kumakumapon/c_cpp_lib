@@ -42,7 +42,8 @@ bool mqtt_client_connect(mqtt_client_t *client, const mqtt_connect_options_t *op
 bool mqtt_client_publish(mqtt_client_t *client, const char *topic, const void *payload, size_t payload_len, mqtt_qos_t qos, bool retain) {
     if (!client || !topic || !client->send_fn) return false;
 
-    mqtt_message_t msg{};
+    mqtt_message_t msg;
+    memset(&msg, 0, sizeof(msg));
     msg.topic = topic;
     msg.topic_len = (uint16_t)strlen(topic);
     msg.payload = (const uint8_t *)payload;
@@ -143,7 +144,8 @@ static void process_single_packet(mqtt_client_t *client, const uint8_t *packet, 
     }
 
     case MQTT_PACKET_TYPE_PUBLISH: {
-        mqtt_message_t msg{};
+        mqtt_message_t msg;
+        memset(&msg, 0, sizeof(msg));
         if (mqtt_deserialize_publish(packet, packet_len, &msg) == MQTT_OK) {
             /* QoS 1 受信時は自動で PUBACK を返信 */
             if (msg.qos == MQTT_QOS_1 && client->send_fn) {

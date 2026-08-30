@@ -100,9 +100,6 @@ ER twai_sem(ID semid, TMO tmout) {
     SCB *scb = &g_kcb.scbs[semid];
     if (!scb->is_created) return E_NOEXS;
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
-    if (!cur) return E_CTX;
-
     if (scb->semcnt > 0) {
         scb->semcnt--;
         return E_OK;
@@ -111,6 +108,9 @@ ER twai_sem(ID semid, TMO tmout) {
     if (tmout == TMO_POL) {
         return E_TMOUT;
     }
+
+    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    if (!cur) return E_CTX;
 
     uitron_task_wait(cur, TTW_SEM, semid, tmout);
     uitron_reschedule();

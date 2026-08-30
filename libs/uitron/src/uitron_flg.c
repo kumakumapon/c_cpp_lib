@@ -106,9 +106,6 @@ ER twai_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn, TMO tmout) {
     FCB *fcb = &g_kcb.fcbs[flgid];
     if (!fcb->is_created) return E_NOEXS;
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
-    if (!cur) return E_CTX;
-
     if (check_flg_cond(fcb->flgptn, waiptn, wfmode)) {
         if (p_flgptn) {
             *p_flgptn = fcb->flgptn;
@@ -122,6 +119,9 @@ ER twai_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn, TMO tmout) {
     if (tmout == TMO_POL) {
         return E_TMOUT;
     }
+
+    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    if (!cur) return E_CTX;
 
     cur->waiptn = waiptn;
     cur->wfmode = wfmode;

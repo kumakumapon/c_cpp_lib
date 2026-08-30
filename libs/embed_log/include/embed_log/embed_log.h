@@ -132,41 +132,41 @@ void embed_log_hexdump(embed_log_level_t level, const char *tag, const void *dat
 /* ---------------------------------------------------------
  * 簡易ロギングマクロ
  * --------------------------------------------------------- */
-#define EMBED_LOG_FATAL(tag, fmt, ...) do { \
-    if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_FATAL) { \
-        embed_log_write(EMBED_LOG_LEVEL_FATAL, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__); \
-    } \
-} while(0)
+#if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_FATAL)
+#define EMBED_LOG_FATAL(tag, fmt, ...) embed_log_write(EMBED_LOG_LEVEL_FATAL, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+#define EMBED_LOG_FATAL(tag, fmt, ...) ((void)0)
+#endif
 
-#define EMBED_LOG_ERROR(tag, fmt, ...) do { \
-    if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_ERROR) { \
-        embed_log_write(EMBED_LOG_LEVEL_ERROR, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__); \
-    } \
-} while(0)
+#if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_ERROR)
+#define EMBED_LOG_ERROR(tag, fmt, ...) embed_log_write(EMBED_LOG_LEVEL_ERROR, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+#define EMBED_LOG_ERROR(tag, fmt, ...) ((void)0)
+#endif
 
-#define EMBED_LOG_WARN(tag, fmt, ...) do { \
-    if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_WARN) { \
-        embed_log_write(EMBED_LOG_LEVEL_WARN, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__); \
-    } \
-} while(0)
+#if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_WARN)
+#define EMBED_LOG_WARN(tag, fmt, ...) embed_log_write(EMBED_LOG_LEVEL_WARN, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+#define EMBED_LOG_WARN(tag, fmt, ...) ((void)0)
+#endif
 
-#define EMBED_LOG_INFO(tag, fmt, ...) do { \
-    if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_INFO) { \
-        embed_log_write(EMBED_LOG_LEVEL_INFO, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__); \
-    } \
-} while(0)
+#if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_INFO)
+#define EMBED_LOG_INFO(tag, fmt, ...) embed_log_write(EMBED_LOG_LEVEL_INFO, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+#define EMBED_LOG_INFO(tag, fmt, ...) ((void)0)
+#endif
 
-#define EMBED_LOG_DEBUG(tag, fmt, ...) do { \
-    if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_DEBUG) { \
-        embed_log_write(EMBED_LOG_LEVEL_DEBUG, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__); \
-    } \
-} while(0)
+#if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_DEBUG)
+#define EMBED_LOG_DEBUG(tag, fmt, ...) embed_log_write(EMBED_LOG_LEVEL_DEBUG, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+#define EMBED_LOG_DEBUG(tag, fmt, ...) ((void)0)
+#endif
 
-#define EMBED_LOG_TRACE(tag, fmt, ...) do { \
-    if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_TRACE) { \
-        embed_log_write(EMBED_LOG_LEVEL_TRACE, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__); \
-    } \
-} while(0)
+#if (EMBED_LOG_MAX_COMPILE_LEVEL >= EMBED_LOG_LEVEL_TRACE)
+#define EMBED_LOG_TRACE(tag, fmt, ...) embed_log_write(EMBED_LOG_LEVEL_TRACE, tag, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#else
+#define EMBED_LOG_TRACE(tag, fmt, ...) ((void)0)
+#endif
 
 /* 短縮形マクロ */
 #define LOG_F(tag, fmt, ...) EMBED_LOG_FATAL(tag, fmt, ##__VA_ARGS__)

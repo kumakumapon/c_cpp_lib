@@ -168,10 +168,12 @@ size_t opcua_server_process_tcp_message(opcua_server_t *server,
 
     if (memcmp(hdr.msg_type, "HEL", 3) == 0) {
         /* Hello メッセージ -> ACK 応答 */
-        opcua_hello_message_t hello{};
+        opcua_hello_message_t hello;
+        memset(&hello, 0, sizeof(hello));
         opcua_decode_hello(req_data, req_len, &hello);
 
-        opcua_ack_message_t ack{};
+        opcua_ack_message_t ack;
+        memset(&ack, 0, sizeof(ack));
         ack.protocol_version = hello.protocol_version;
         ack.receive_buffer_size = 65535;
         ack.send_buffer_size = 65535;
