@@ -87,9 +87,6 @@ ER tget_mpf(ID mpfid, VP *p_blk, TMO tmout) {
     PCB *pcb = &g_kcb.pcbs[mpfid];
     if (!pcb->is_created) return E_NOEXS;
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
-    if (!cur) return E_CTX;
-
     if (pcb->fblkcnt > 0 && pcb->free_list) {
         void *blk = pcb->free_list;
         pcb->free_list = *(uint8_t **)blk;
@@ -101,6 +98,9 @@ ER tget_mpf(ID mpfid, VP *p_blk, TMO tmout) {
     if (tmout == TMO_POL) {
         return E_TMOUT;
     }
+
+    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    if (!cur) return E_CTX;
 
     cur->p_mpf_blk = p_blk;
     uitron_task_wait(cur, TTW_MPF, mpfid, tmout);

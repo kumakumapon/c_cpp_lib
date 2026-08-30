@@ -7,6 +7,9 @@ function(target_set_warnings TARGET_NAME)
             /utf-8
             /permissive-
         )
+        target_compile_definitions(${TARGET_NAME} PRIVATE
+            _CRT_SECURE_NO_WARNINGS
+        )
     else()
         target_compile_options(${TARGET_NAME} PRIVATE
             -Wall

@@ -14,10 +14,10 @@ void test_modbus_crc() {
     std::cout << "[Test] Running Modbus CRC16 & LRC tests..." << std::endl;
 
     // 標準Modbus RTUフレーム例: Unit 1, FC 0x03, Start 0x0000, Count 0x000A
-    // 期待CRC16: 0xC5CD (フレーム末尾には 0xCD, 0xC5 の順で格納される)
+    // 期待CRC16: 0xCDC5 (フレーム末尾には 0xC5, 0xCD の順で格納される)
     const uint8_t msg[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x0A};
     uint16_t crc = modbus_crc16(msg, sizeof(msg));
-    assert(crc == 0xC5CD);
+    assert(crc == 0xCDC5);
 
     // LRCテスト
     uint8_t lrc = modbus_lrc(msg, sizeof(msg));

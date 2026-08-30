@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <cstdio>
+#include <cstdarg>
 
 #include "embed_heap/embed_heap.h"
 #include "embed_heap/embed_heap.hpp"

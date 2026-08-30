@@ -51,7 +51,7 @@ public:
     }
 
     bool send_ping() {
-        return uart_proto_send_ping(&proto_, target_seq_dummy());
+        return uart_proto_send_ping(&proto_);
     }
 
     uart_parse_status_t parse_byte(uint8_t byte) {

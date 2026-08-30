@@ -84,50 +84,61 @@ static void *alloc_internal(embed_heap_t *heap, size_t size, size_t alignment) {
     embed_heap_block_t *curr = heap->first_block;
     while (curr) {
         if (curr->magic != EMBED_HEAP_MAGIC) {
-            /* ヒープ破損検知 */
             return NULL;
         }
 
         if (curr->is_free) {
-            uintptr_t payload_addr = (uintptr_t)((uint8_t *)curr + BLOCK_HEADER_SIZE);
+            uintptr_t block_addr = (uintptr_t)curr;
+            uintptr_t payload_addr = block_addr + BLOCK_HEADER_SIZE;
             uintptr_t aligned_payload = ALIGN_UP(payload_addr, alignment);
-            size_t align_padding = (size_t)(aligned_payload - payload_addr);
 
-            if (curr->size >= needed_size + align_padding) {
+            size_t pad_needed = 0;
+            if (aligned_payload != payload_addr) {
+                if (aligned_payload < payload_addr + BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD) {
+                    aligned_payload = ALIGN_UP(payload_addr + BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD, alignment);
+                }
+                pad_needed = (size_t)(aligned_payload - payload_addr);
+            }
+
+            if (curr->size >= needed_size + pad_needed) {
                 /* アライメントパディングが必要な場合、前方に空きブロックを作成 */
-                if (align_padding >= BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD) {
+                if (pad_needed > 0) {
                     embed_heap_block_t *pad_block = curr;
-                    pad_block->size = align_padding - BLOCK_HEADER_SIZE;
+                    embed_heap_block_t *new_block = (embed_heap_block_t *)(aligned_payload - BLOCK_HEADER_SIZE);
+                    embed_heap_block_t *orig_next = pad_block->next;
+                    size_t orig_size = curr->size;
+
+                    pad_block->size = pad_needed - BLOCK_HEADER_SIZE;
                     pad_block->is_free = true;
 
-                    embed_heap_block_t *new_block = (embed_heap_block_t *)((uint8_t *)pad_block + BLOCK_HEADER_SIZE + pad_block->size);
                     new_block->magic = EMBED_HEAP_MAGIC;
-                    new_block->size = curr->size - align_padding;
+                    new_block->size = orig_size - pad_needed;
                     new_block->is_free = true;
                     new_block->prev = pad_block;
-                    new_block->next = pad_block->next;
+                    new_block->next = orig_next;
 
-                    if (pad_block->next) {
-                        pad_block->next->prev = new_block;
+                    if (orig_next) {
+                        orig_next->prev = new_block;
                     }
                     pad_block->next = new_block;
 
                     curr = new_block;
-                    payload_addr = (uintptr_t)((uint8_t *)curr + BLOCK_HEADER_SIZE);
                 }
 
                 /* 分割判定 */
                 size_t remaining = curr->size - needed_size;
                 if (remaining >= BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD) {
                     embed_heap_block_t *next_block = (embed_heap_block_t *)((uint8_t *)curr + BLOCK_HEADER_SIZE + needed_size);
+                    embed_heap_block_t *orig_curr_next = curr->next;
+
                     next_block->magic = EMBED_HEAP_MAGIC;
                     next_block->size = remaining - BLOCK_HEADER_SIZE;
                     next_block->is_free = true;
                     next_block->prev = curr;
-                    next_block->next = curr->next;
+                    next_block->next = orig_curr_next;
 
-                    if (curr->next) {
-                        curr->next->prev = next_block;
+                    if (orig_curr_next) {
+                        orig_curr_next->prev = next_block;
                     }
                     curr->next = next_block;
                     curr->size = needed_size;
