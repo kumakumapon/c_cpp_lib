@@ -15,6 +15,7 @@ c_cpp_lib/
 │   ├── CMakeLists.txt          # 各ライブラリの自動読み込み設定
 │   ├── embed_heap/             # 組み込み向け静的ヒープメモリアロケータ ([仕様・使い方ドキュメント](libs/embed_heap/README.md))
 │   ├── embed_log/              # 組み込み向け軽量ロガーライブラリ ([仕様・使い方ドキュメント](libs/embed_log/README.md))
+│   ├── embed_modbus/           # 組み込み向けModbus RTU/ASCIIプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_modbus/README.md))
 │   ├── uitron/                 # μITRON 4.0 仕様準拠 RTOS API ライブラリ ([仕様・使い方ドキュメント](libs/uitron/README.md))
 │   ├── uart_protocol/          # 組み込み向けUART通信プロトコルスタック ([仕様・使い方ドキュメント](libs/uart_protocol/README.md))
 │   └── sample_math/            # サンプルライブラリ（数学ユーティリティ）
@@ -22,6 +23,7 @@ c_cpp_lib/
 │   ├── CMakeLists.txt          # 各アプリの自動読み込み設定
 │   ├── embed_heap_demo/        # embed_heapのデモアプリ
 │   ├── embed_log_demo/         # embed_logのデモアプリ
+│   ├── modbus_demo/            # Modbus RTU Master/Slaveのデモアプリ
 │   ├── uitron_demo/            # μITRON 4.0 APIのデモアプリ
 │   ├── uart_protocol_demo/     # UARTプロトコルスタックのデモアプリ
 │   └── cli_demo/               # サンプルCLIアプリケーション
