@@ -15,13 +15,18 @@ c_cpp_lib/
 │   ├── CMakeLists.txt          # 各ライブラリの自動読み込み設定
 │   ├── embed_bridge/           # 産業用マルチプロトコル・データルーター / ゲートウェイ ([仕様・使い方ドキュメント](libs/embed_bridge/README.md))
 │   ├── embed_canopen/          # 組み込み向けCANopen (CiA 301/402) プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_canopen/README.md))
+│   ├── embed_diag/             # 組み込み向け障害診断・ブラックボックスレコーダー ([仕様・使い方ドキュメント](libs/embed_diag/README.md))
 │   ├── embed_eip/              # 産業用EtherNet/IP (CIP) プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_eip/README.md))
+│   ├── embed_filter/           # 組み込み向けセンサDSP & 姿勢推定フィルタ集 ([仕様・使い方ドキュメント](libs/embed_filter/README.md))
+│   ├── embed_fsm/              # 組み込み向け階層型状態遷移マシン (HSM) ([仕様・使い方ドキュメント](libs/embed_fsm/README.md))
 │   ├── embed_heap/             # 組み込み向け静的ヒープメモリアロケータ ([仕様・使い方ドキュメント](libs/embed_heap/README.md))
+│   ├── embed_kinematics/       # ロボット運動学 & オドメトリ計算ライブラリ ([仕様・使い方ドキュメント](libs/embed_kinematics/README.md))
 │   ├── embed_log/              # 組み込み向け軽量ロガーライブラリ ([仕様・使い方ドキュメント](libs/embed_log/README.md))
 │   ├── embed_modbus/           # 組み込み向けModbus RTU/ASCIIプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_modbus/README.md))
 │   ├── embed_motion/           # モータ加減速・軌道生成プロファイル ([仕様・使い方ドキュメント](libs/embed_motion/README.md))
 │   ├── embed_mqtt/             # 組み込み向けMQTT v3.1.1プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_mqtt/README.md))
 │   ├── embed_opcua/            # 産業用OPC-UAバイナリプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_opcua/README.md))
+│   ├── embed_path/             # 自律ロボット向け経路計画 & 追従コントローラ ([仕様・使い方ドキュメント](libs/embed_path/README.md))
 │   ├── embed_pid/              # 組み込み向け高機能PID制御ライブラリ ([仕様・使い方ドキュメント](libs/embed_pid/README.md))
 │   ├── uitron/                 # μITRON 4.0 仕様準拠 RTOS API ライブラリ ([仕様・使い方ドキュメント](libs/uitron/README.md))
 │   ├── uart_protocol/          # 組み込み向けUART通信プロトコルスタック ([仕様・使い方ドキュメント](libs/uart_protocol/README.md))
@@ -39,6 +44,7 @@ c_cpp_lib/
 │   ├── mqtt_demo/              # MQTT v3.1.1 クライアントのデモアプリ
 │   ├── opcua_demo/             # OPC-UA Serverのデモアプリ
 │   ├── pid_demo/               # PID制御シミュレーション（温度・モータ速度）デモアプリ
+│   ├── robotics_demo/          # 自律移動ロボット (A*/PurePursuit/FSM/Diag) 統合デモ
 │   ├── uitron_demo/            # μITRON 4.0 APIのデモアプリ
 │   └── uart_protocol_demo/     # UARTプロトコルスタックのデモアプリ
 └── README.md
