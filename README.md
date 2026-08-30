@@ -14,16 +14,14 @@ c_cpp_lib/
 ├── libs/                       # 独立したライブラリ群
 │   ├── CMakeLists.txt          # 各ライブラリの自動読み込み設定
 │   ├── embed_heap/             # 組み込み向け静的ヒープメモリアロケータ ([仕様・使い方ドキュメント](libs/embed_heap/README.md))
+│   ├── embed_log/              # 組み込み向け軽量ロガーライブラリ ([仕様・使い方ドキュメント](libs/embed_log/README.md))
 │   ├── uitron/                 # μITRON 4.0 仕様準拠 RTOS API ライブラリ ([仕様・使い方ドキュメント](libs/uitron/README.md))
 │   ├── uart_protocol/          # 組み込み向けUART通信プロトコルスタック ([仕様・使い方ドキュメント](libs/uart_protocol/README.md))
-│   │   ├── CMakeLists.txt
-│   │   ├── include/uart_protocol/ (uart_protocol.h, uart_protocol.hpp, uart_crc.h, uart_ringbuf.h)
-│   │   ├── src/
-│   │   └── tests/
 │   └── sample_math/            # サンプルライブラリ（数学ユーティリティ）
 ├── apps/                       # 独立したアプリケーション群
 │   ├── CMakeLists.txt          # 各アプリの自動読み込み設定
 │   ├── embed_heap_demo/        # embed_heapのデモアプリ
+│   ├── embed_log_demo/         # embed_logのデモアプリ
 │   ├── uitron_demo/            # μITRON 4.0 APIのデモアプリ
 │   ├── uart_protocol_demo/     # UARTプロトコルスタックのデモアプリ
 │   └── cli_demo/               # サンプルCLIアプリケーション
