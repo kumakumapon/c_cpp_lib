@@ -19,6 +19,7 @@ c_cpp_lib/
 │   ├── embed_modbus/           # 組み込み向けModbus RTU/ASCIIプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_modbus/README.md))
 │   ├── embed_mqtt/             # 組み込み向けMQTT v3.1.1プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_mqtt/README.md))
 │   ├── embed_opcua/            # 産業用OPC-UAバイナリプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_opcua/README.md))
+│   ├── embed_pid/              # 組み込み向け高機能PID制御ライブラリ ([仕様・使い方ドキュメント](libs/embed_pid/README.md))
 │   ├── uitron/                 # μITRON 4.0 仕様準拠 RTOS API ライブラリ ([仕様・使い方ドキュメント](libs/uitron/README.md))
 │   ├── uart_protocol/          # 組み込み向けUART通信プロトコルスタック ([仕様・使い方ドキュメント](libs/uart_protocol/README.md))
 │   └── sample_math/            # サンプルライブラリ（数学ユーティリティ）
@@ -30,6 +31,7 @@ c_cpp_lib/
 │   ├── modbus_demo/            # Modbus RTU Master/Slaveのデモアプリ
 │   ├── mqtt_demo/              # MQTT v3.1.1 クライアントのデモアプリ
 │   ├── opcua_demo/             # OPC-UA Serverのデモアプリ
+│   ├── pid_demo/               # PID制御シミュレーション（温度・モータ速度）デモアプリ
 │   ├── uitron_demo/            # μITRON 4.0 APIのデモアプリ
 │   ├── uart_protocol_demo/     # UARTプロトコルスタックのデモアプリ
 │   └── cli_demo/               # サンプルCLIアプリケーション
