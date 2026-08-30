@@ -13,6 +13,7 @@ c_cpp_lib/
 │   └── CompilerWarnings.cmake  # 警告レベル等の共通コンパイル設定
 ├── libs/                       # 独立したライブラリ群
 │   ├── CMakeLists.txt          # 各ライブラリの自動読み込み設定
+│   ├── embed_eip/              # 産業用EtherNet/IP (CIP) プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_eip/README.md))
 │   ├── embed_heap/             # 組み込み向け静的ヒープメモリアロケータ ([仕様・使い方ドキュメント](libs/embed_heap/README.md))
 │   ├── embed_log/              # 組み込み向け軽量ロガーライブラリ ([仕様・使い方ドキュメント](libs/embed_log/README.md))
 │   ├── embed_modbus/           # 組み込み向けModbus RTU/ASCIIプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_modbus/README.md))
@@ -23,6 +24,7 @@ c_cpp_lib/
 │   └── sample_math/            # サンプルライブラリ（数学ユーティリティ）
 ├── apps/                       # 独立したアプリケーション群
 │   ├── CMakeLists.txt          # 各アプリの自動読み込み設定
+│   ├── eip_demo/               # EtherNet/IP アダプタノードのデモアプリ
 │   ├── embed_heap_demo/        # embed_heapのデモアプリ
 │   ├── embed_log_demo/         # embed_logのデモアプリ
 │   ├── modbus_demo/            # Modbus RTU Master/Slaveのデモアプリ
