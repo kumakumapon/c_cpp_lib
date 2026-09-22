@@ -1,5 +1,6 @@
+#include <cstring>
 #include <iostream>
-#include <cassert>
+#include "embed_test/embed_test.hpp"
 #include <vector>
 #include <cmath>
 #include <string>
@@ -16,8 +17,8 @@ static void mock_mqtt_send(const uint8_t *data, size_t len, void *user_data) {
     (void)data; (void)len; (void)user_data;
 }
 
-void test_bridge_modbus_to_opcua() {
-    std::cout << "[Test] Running Modbus -> OPC-UA bridge tests..." << std::endl;
+TEST_CASE(test_bridge_modbus_to_opcua) {
+    std::cout << "# [Test] Running Modbus -> OPC-UA bridge tests..." << std::endl;
 
     uint16_t modbus_regs[10] = {0};
     modbus_regs[2] = 250; // 25.0 degC * 10
@@ -43,18 +44,18 @@ void test_bridge_modbus_to_opcua() {
     router.map_modbus_to_opcua(2, temp_node, BRIDGE_TYPE_FLOAT, 0.1f, 0.0f);
 
     size_t synced = router.sync_all();
-    assert(synced == 1);
+    CHECK(synced == 1);
 
     opcua_datavalue_t dv{};
-    assert(opcua_server_read_value(&server, &temp_node, &dv));
-    assert(dv.value.type == OPCUA_TYPE_FLOAT);
-    assert(fabsf(dv.value.value.float_val - 25.0f) < 0.001f);
+    CHECK(opcua_server_read_value(&server, &temp_node, &dv));
+    CHECK(dv.value.type == OPCUA_TYPE_FLOAT);
+    CHECK(fabsf(dv.value.value.float_val - 25.0f) < 0.001f);
 
-    std::cout << "[Test] Modbus -> OPC-UA bridge passed!" << std::endl;
+    std::cout << "# [Test] Modbus -> OPC-UA bridge passed!" << std::endl;
 }
 
-void test_bridge_canopen_and_eip_to_mqtt() {
-    std::cout << "[Test] Running CANopen & EIP -> MQTT bridge tests..." << std::endl;
+TEST_CASE(test_bridge_canopen_and_eip_to_mqtt) {
+    std::cout << "# [Test] Running CANopen & EIP -> MQTT bridge tests..." << std::endl;
 
     // 1. CANopen Setup
     canopen_node_t can_node;
@@ -95,16 +96,16 @@ void test_bridge_canopen_and_eip_to_mqtt() {
     router.map_eip_to_mqtt(100, 0, "sensors/flow", BRIDGE_TYPE_FLOAT);
 
     size_t count = router.sync_all();
-    assert(count == 2);
+    CHECK(count == 2);
 
     // Verify Modbus reg 5 has motor speed 1500
-    assert(modbus_regs[5] == 1500);
+    CHECK(modbus_regs[5] == 1500);
 
-    std::cout << "[Test] CANopen & EIP -> MQTT bridge passed!" << std::endl;
+    std::cout << "# [Test] CANopen & EIP -> MQTT bridge passed!" << std::endl;
 }
 
-void test_bridge_periodic_and_cov() {
-    std::cout << "[Test] Running Periodic and COV synchronization tests..." << std::endl;
+TEST_CASE(test_bridge_periodic_and_cov) {
+    std::cout << "# [Test] Running Periodic and COV synchronization tests..." << std::endl;
 
     float raw_var = 10.0f;
     uint16_t modbus_regs[5] = {0};
@@ -139,35 +140,22 @@ void test_bridge_periodic_and_cov() {
 
     // 1st tick: COV detects initial change, Periodic at 50ms does not fire
     size_t n = router.tick(50);
-    assert(n == 1); // Only COV synced
-    assert(modbus_regs[0] == 10);
-    assert(modbus_regs[1] == 0); // Periodic hasn't fired yet
+    CHECK(n == 1); // Only COV synced
+    CHECK(modbus_regs[0] == 10);
+    CHECK(modbus_regs[1] == 0); // Periodic hasn't fired yet
 
     // 2nd tick: 50ms more (total 100ms) -> Periodic fires!
     n = router.tick(50);
-    assert(n == 1); // Only Periodic synced (COV didn't change)
-    assert(modbus_regs[1] == 20); // 10 * 2
+    CHECK(n == 1); // Only Periodic synced (COV didn't change)
+    CHECK(modbus_regs[1] == 20); // 10 * 2
 
     // Now change raw_var
     raw_var = 42.0f;
     n = router.tick(10);
-    assert(n == 1); // COV fired
-    assert(modbus_regs[0] == 42);
+    CHECK(n == 1); // COV fired
+    CHECK(modbus_regs[0] == 42);
 
-    std::cout << "[Test] Periodic and COV synchronization passed!" << std::endl;
+    std::cout << "# [Test] Periodic and COV synchronization passed!" << std::endl;
 }
 
-int main() {
-    std::cout << "========================================" << std::endl;
-    std::cout << " Running embed_bridge test suite..." << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    test_bridge_modbus_to_opcua();
-    test_bridge_canopen_and_eip_to_mqtt();
-    test_bridge_periodic_and_cov();
-
-    std::cout << "========================================" << std::endl;
-    std::cout << " All embed_bridge tests PASSED!" << std::endl;
-    std::cout << "========================================" << std::endl;
-    return 0;
-}
+EMBED_TEST_MAIN()

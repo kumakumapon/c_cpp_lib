@@ -11,3 +11,5 @@ target_link_libraries(test_bridge
 target_set_warnings(test_bridge)
 
 add_test(NAME test_bridge COMMAND test_bridge)
+
+target_link_libraries(test_bridge PRIVATE embed_test)

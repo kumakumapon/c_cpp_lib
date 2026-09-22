@@ -1,0 +1,4 @@
+add_executable(test_embed_fixed test_embed_fixed.cpp)
+target_link_libraries(test_embed_fixed PRIVATE embed_fixed embed_test)
+target_set_warnings(test_embed_fixed)
+add_test(NAME test_embed_fixed COMMAND test_embed_fixed)

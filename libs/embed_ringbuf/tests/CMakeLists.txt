@@ -1,0 +1,4 @@
+add_executable(test_embed_ringbuf test_embed_ringbuf.cpp)
+target_link_libraries(test_embed_ringbuf PRIVATE embed_ringbuf embed_test)
+target_set_warnings(test_embed_ringbuf)
+add_test(NAME test_embed_ringbuf COMMAND test_embed_ringbuf)

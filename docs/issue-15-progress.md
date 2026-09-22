@@ -22,3 +22,11 @@ Previously proposed libraries listed only as background in #15 are not part of t
 4. Update documentation and PR with actual tests and limitations; mark ready only when complete.
 
 Hardware-specific CPU register diagnostics use target-provided hooks; host tests cannot certify functional safety.
+
+## Checkpoint 2026-09-22
+Implemented first pass of A-1..A-9 and B-1..B-6, including shared ring buffer.
+MSVC Release: 24 suites passed before boundary regression additions.
+Added explicit NDEBUG expected-failure test, boundary regressions, CI and install consumer.
+Remaining: run full validation, inspect Linux/ASan results, complete bridge TCP integration,
+review edge cases, document APIs/constraints and replace this progress checklist with final evidence.
+Untracked *_issue15.py scripts are one-shot editing helpers: do not rerun them.

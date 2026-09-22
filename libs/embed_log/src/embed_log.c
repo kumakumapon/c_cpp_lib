@@ -199,6 +199,7 @@ void embed_log_write_va(embed_log_level_t level, const char *tag, const char *fi
         line_buf[offset] = '\0';
     }
 
+    line_buf[offset] = '\0';
     dispatch_to_backends(line_buf, (size_t)offset);
 
     logger_exit_critical();
@@ -213,16 +214,16 @@ void embed_log_write(embed_log_level_t level, const char *tag, const char *file,
 }
 
 void embed_log_hexdump(embed_log_level_t level, const char *tag, const void *data, size_t size) {
-    if (level > s_logger.level || !data || size == 0) {
+    if (level == EMBED_LOG_LEVEL_NONE || level > s_logger.level || !data || size == 0) {
         return;
     }
 
     const uint8_t *bytes = (const uint8_t *)data;
     char line_buf[128];
 
-    logger_enter_critical();
-
     embed_log_write(level, tag, "", 0, "--- HexDump (%zu bytes) ---", size);
+
+    logger_enter_critical();
 
     for (size_t i = 0; i < size; i += 16) {
         int offset = snprintf(line_buf, sizeof(line_buf), "  %04X: ", (unsigned int)i);
@@ -252,7 +253,8 @@ void embed_log_hexdump(embed_log_level_t level, const char *tag, const void *dat
             line_buf[offset] = '\0';
         }
 
-        dispatch_to_backends(line_buf, (size_t)offset);
+        line_buf[offset] = '\0';
+    dispatch_to_backends(line_buf, (size_t)offset);
     }
 
     logger_exit_critical();

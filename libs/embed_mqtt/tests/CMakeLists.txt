@@ -10,3 +10,5 @@ target_link_libraries(test_mqtt
 target_set_warnings(test_mqtt)
 
 add_test(NAME test_mqtt COMMAND test_mqtt)
+
+target_link_libraries(test_mqtt PRIVATE embed_test)

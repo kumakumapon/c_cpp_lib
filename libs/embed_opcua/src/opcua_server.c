@@ -1,5 +1,6 @@
 #include "embed_opcua/opcua_server.h"
 #include <string.h>
+#include <stdio.h>
 
 void opcua_server_init(opcua_server_t *server, const char *endpoint_url) {
     if (!server) return;
@@ -7,7 +8,7 @@ void opcua_server_init(opcua_server_t *server, const char *endpoint_url) {
     if (endpoint_url) {
         strncpy(server->endpoint_url, endpoint_url, sizeof(server->endpoint_url) - 1);
     } else {
-        strcpy(server->endpoint_url, "opc.tcp://localhost:4840");
+        snprintf(server->endpoint_url, sizeof(server->endpoint_url), "%s", "opc.tcp://localhost:4840");
     }
 }
 
@@ -123,7 +124,7 @@ uint32_t opcua_server_process_read(const opcua_server_t *server,
 
     case OPCUA_ATTR_DISPLAY_NAME:
         out_value->value.type = OPCUA_TYPE_STRING;
-        strncpy(out_value->value.value.string_val, node->display_name.text, sizeof(out_value->value.value.string_val) - 1);
+        snprintf(out_value->value.value.string_val, sizeof(out_value->value.value.string_val), "%s", node->display_name.text);
         out_value->status = OPCUA_STATUS_GOOD;
         return OPCUA_STATUS_GOOD;
 
@@ -159,18 +160,18 @@ uint32_t opcua_server_process_write(opcua_server_t *server,
 size_t opcua_server_process_tcp_message(opcua_server_t *server,
                                         const uint8_t *req_data, size_t req_len,
                                         uint8_t *resp_data, size_t max_resp_len) {
-    if (!server || !req_data || req_len < 8 || !resp_data || max_resp_len < 32) {
+    if (!server || !req_data || req_len < 8 || !resp_data || max_resp_len < 8) {
         return 0;
     }
 
     opcua_tcp_header_t hdr;
-    opcua_decode_tcp_header(req_data, req_len, &hdr);
+    if (!opcua_decode_tcp_header(req_data, req_len, &hdr) || hdr.msg_size != req_len || hdr.is_final != 'F') return 0;
 
     if (memcmp(hdr.msg_type, "HEL", 3) == 0) {
         /* Hello メッセージ -> ACK 応答 */
         opcua_hello_message_t hello;
         memset(&hello, 0, sizeof(hello));
-        opcua_decode_hello(req_data, req_len, &hello);
+        if (!opcua_decode_hello(req_data, req_len, &hello)) return 0;
 
         opcua_ack_message_t ack;
         memset(&ack, 0, sizeof(ack));
@@ -180,7 +181,7 @@ size_t opcua_server_process_tcp_message(opcua_server_t *server,
         ack.max_message_size = OPCUA_MAX_MESSAGE_SIZE;
         ack.max_chunk_count = 1;
 
-        return opcua_encode_ack(&ack, resp_data);
+        return opcua_encode_ack(&ack, resp_data, max_resp_len);
     } else if (memcmp(hdr.msg_type, "MSG", 3) == 0) {
         /* MSG (Read / Write サービス等) */
         // 単純化されたReadサービス応答を生成
@@ -191,10 +192,12 @@ size_t opcua_server_process_tcp_message(opcua_server_t *server,
         size_t off = 8;
         // 先頭ノードの値を読み出してパック
         if (server->node_count > 0) {
-            off += opcua_encode_datavalue(&server->nodes[0].value, &resp_data[off]);
+            size_t n = opcua_encode_datavalue(&server->nodes[0].value, &resp_data[off], max_resp_len - off);
+            if (!n) return 0;
+            off += n;
         }
         resp_hdr.msg_size = (uint32_t)off;
-        opcua_encode_tcp_header(&resp_hdr, resp_data);
+        opcua_encode_tcp_header(&resp_hdr, resp_data, max_resp_len);
         return off;
     }
 

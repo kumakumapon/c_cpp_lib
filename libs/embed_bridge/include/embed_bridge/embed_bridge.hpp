@@ -4,6 +4,7 @@
 
 #include "bridge_types.h"
 #include "bridge_router.h"
+#include <cstring>
 #include <string>
 #include <vector>
 

@@ -10,3 +10,5 @@ target_link_libraries(test_embed_heap
 target_set_warnings(test_embed_heap)
 
 add_test(NAME test_embed_heap COMMAND test_embed_heap)
+
+target_link_libraries(test_embed_heap PRIVATE embed_test)

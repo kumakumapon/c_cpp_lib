@@ -10,3 +10,5 @@ target_link_libraries(test_embed_log
 target_set_warnings(test_embed_log)
 
 add_test(NAME test_embed_log COMMAND test_embed_log)
+
+target_link_libraries(test_embed_log PRIVATE embed_test)

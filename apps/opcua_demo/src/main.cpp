@@ -51,7 +51,7 @@ int main() {
         strcpy(client_hello.endpoint_url, "opc.tcp://192.168.1.100:4840");
 
         uint8_t hello_buf[256];
-        size_t hello_len = opcua_encode_hello(&client_hello, hello_buf);
+        size_t hello_len = opcua_encode_hello(&client_hello, hello_buf, sizeof(hello_buf));
         print_binary_frame("[Client -> HEL]", hello_buf, hello_len);
 
         // サーバーが処理して ACK を返信

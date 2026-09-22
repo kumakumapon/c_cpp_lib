@@ -1,5 +1,6 @@
 #include "embed_eip/eip_adapter.h"
 #include <string.h>
+#include <stdio.h>
 
 void eip_adapter_init(eip_adapter_t *adapter, const cip_identity_attr_t *identity) {
     if (!adapter) return;
@@ -14,7 +15,7 @@ void eip_adapter_init(eip_adapter_t *adapter, const cip_identity_attr_t *identit
         adapter->identity.minor_revision = 0;
         adapter->identity.status = 0x0060;
         adapter->identity.serial_number = 0x12345678;
-        strcpy(adapter->identity.product_name, "Embedded EIP Adapter");
+        snprintf(adapter->identity.product_name, sizeof(adapter->identity.product_name), "%s", "Embedded EIP Adapter");
     }
     adapter->next_session_id = 0x1000;
 }

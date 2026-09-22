@@ -10,3 +10,5 @@ target_link_libraries(test_eip
 target_set_warnings(test_eip)
 
 add_test(NAME test_eip COMMAND test_eip)
+
+target_link_libraries(test_eip PRIVATE embed_test)

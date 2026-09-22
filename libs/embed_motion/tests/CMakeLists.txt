@@ -10,3 +10,5 @@ target_link_libraries(test_motion
 target_set_warnings(test_motion)
 
 add_test(NAME test_motion COMMAND test_motion)
+
+target_link_libraries(test_motion PRIVATE embed_test)

@@ -11,3 +11,5 @@ target_link_libraries(test_diag
 target_set_warnings(test_diag)
 
 add_test(NAME test_diag COMMAND test_diag)
+
+target_link_libraries(test_diag PRIVATE embed_test)

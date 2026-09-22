@@ -17,3 +17,5 @@ target_set_warnings(embed_modbus)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+target_link_libraries(embed_modbus PUBLIC embed_crc)

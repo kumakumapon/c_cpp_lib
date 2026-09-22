@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <cassert>
+#include "embed_test/embed_test.hpp"
 #include <cstring>
 
 #include "embed_eip/eip_types.h"
@@ -10,8 +10,8 @@
 #include "embed_eip/eip_adapter.h"
 #include "embed_eip/embed_eip.hpp"
 
-void test_encap_header() {
-    std::cout << "[Test] Running Encapsulation Header tests..." << std::endl;
+TEST_CASE(test_encap_header) {
+    std::cout << "# [Test] Running Encapsulation Header tests..." << std::endl;
 
     eip_encap_header_t hdr_in;
     memset(&hdr_in, 0, sizeof(hdr_in));
@@ -25,22 +25,22 @@ void test_encap_header() {
 
     uint8_t buffer[64];
     size_t enc_sz = eip_encode_encap_header(&hdr_in, buffer);
-    assert(enc_sz == EIP_ENCAP_HEADER_SIZE);
+    CHECK(enc_sz == EIP_ENCAP_HEADER_SIZE);
 
     eip_encap_header_t hdr_out;
     size_t dec_sz = eip_decode_encap_header(buffer, sizeof(buffer), &hdr_out);
-    assert(dec_sz == EIP_ENCAP_HEADER_SIZE);
-    assert(hdr_out.command == EIP_CMD_REGISTER_SESSION);
-    assert(hdr_out.length == 4);
-    assert(hdr_out.session_handle == 0x12345678);
-    assert(hdr_out.status == EIP_STATUS_SUCCESS);
-    assert(memcmp(hdr_out.sender_context, ctx, 8) == 0);
+    CHECK(dec_sz == EIP_ENCAP_HEADER_SIZE);
+    CHECK(hdr_out.command == EIP_CMD_REGISTER_SESSION);
+    CHECK(hdr_out.length == 4);
+    CHECK(hdr_out.session_handle == 0x12345678);
+    CHECK(hdr_out.status == EIP_STATUS_SUCCESS);
+    CHECK(memcmp(hdr_out.sender_context, ctx, 8) == 0);
 
-    std::cout << "[Test] Encapsulation Header passed!" << std::endl;
+    std::cout << "# [Test] Encapsulation Header passed!" << std::endl;
 }
 
-void test_epath_and_cip_messages() {
-    std::cout << "[Test] Running EPATH & CIP message tests..." << std::endl;
+TEST_CASE(test_epath_and_cip_messages) {
+    std::cout << "# [Test] Running EPATH & CIP message tests..." << std::endl;
 
     // 1. EPATH: Class 0x01 (Identity), Instance 0x01, Attribute 0x07 (Product Name)
     cip_epath_t path_in;
@@ -51,34 +51,34 @@ void test_epath_and_cip_messages() {
 
     uint8_t epath_buf[32];
     size_t epath_len = cip_encode_epath(&path_in, epath_buf);
-    assert(epath_len == 6); // 2B (Class) + 2B (Inst) + 2B (Attr)
+    CHECK(epath_len == 6); // 2B (Class) + 2B (Inst) + 2B (Attr)
 
     cip_epath_t path_out;
     size_t dec_len = cip_decode_epath(epath_buf, epath_len, &path_out);
-    assert(dec_len == 6);
-    assert(path_out.class_id == CIP_CLASS_IDENTITY);
-    assert(path_out.instance_id == 1);
-    assert(path_out.attribute_id == 7);
-    assert(path_out.has_attribute == true);
+    CHECK(dec_len == 6);
+    CHECK(path_out.class_id == CIP_CLASS_IDENTITY);
+    CHECK(path_out.instance_id == 1);
+    CHECK(path_out.attribute_id == 7);
+    CHECK(path_out.has_attribute == true);
 
     // 2. CIP Request Encode / Decode
     uint8_t req_buf[64];
     size_t req_len = cip_build_get_attribute_single(CIP_CLASS_IDENTITY, 1, 7, req_buf, sizeof(req_buf));
-    assert(req_len > 0);
+    CHECK(req_len > 0);
 
     cip_request_t req_dec;
     bool ok = cip_decode_request(req_buf, req_len, &req_dec);
-    assert(ok);
-    assert(req_dec.service == CIP_SERVICE_GET_ATTRIBUTE_SINGLE);
-    assert(req_dec.path.class_id == CIP_CLASS_IDENTITY);
-    assert(req_dec.path.instance_id == 1);
-    assert(req_dec.path.attribute_id == 7);
+    CHECK(ok);
+    CHECK(req_dec.service == CIP_SERVICE_GET_ATTRIBUTE_SINGLE);
+    CHECK(req_dec.path.class_id == CIP_CLASS_IDENTITY);
+    CHECK(req_dec.path.instance_id == 1);
+    CHECK(req_dec.path.attribute_id == 7);
 
-    std::cout << "[Test] EPATH & CIP messages passed!" << std::endl;
+    std::cout << "# [Test] EPATH & CIP messages passed!" << std::endl;
 }
 
-void test_adapter_session_and_identity() {
-    std::cout << "[Test] Running Adapter Session & Identity tests..." << std::endl;
+TEST_CASE(test_adapter_session_and_identity) {
+    std::cout << "# [Test] Running Adapter Session & Identity tests..." << std::endl;
 
     cip_identity_attr_t id{};
     id.vendor_id = 0x002A; // Rockwell
@@ -108,12 +108,12 @@ void test_adapter_session_and_identity() {
 
     uint8_t resp_packet[256];
     size_t resp_len = eip_adapter_process_packet(&adapter, req_packet, req_len, resp_packet, sizeof(resp_packet));
-    assert(resp_len == EIP_ENCAP_HEADER_SIZE + 4);
+    CHECK(resp_len == EIP_ENCAP_HEADER_SIZE + 4);
 
     eip_encap_header_t reg_resp_hdr;
     eip_decode_encap_header(resp_packet, resp_len, &reg_resp_hdr);
-    assert(reg_resp_hdr.status == EIP_STATUS_SUCCESS);
-    assert(reg_resp_hdr.session_handle != 0);
+    CHECK(reg_resp_hdr.status == EIP_STATUS_SUCCESS);
+    CHECK(reg_resp_hdr.session_handle != 0);
     uint32_t session_id = reg_resp_hdr.session_handle;
 
     // 2. SendRRData: Get_Attribute_Single (Identity Product Name)
@@ -122,33 +122,33 @@ void test_adapter_session_and_identity() {
 
     uint8_t send_rr_buf[256];
     size_t send_rr_len = eip_build_send_rr_data(session_id, reg_resp_hdr.sender_context, cip_req, cip_req_len, send_rr_buf, sizeof(send_rr_buf));
-    assert(send_rr_len > 0);
+    CHECK(send_rr_len > 0);
 
     resp_len = eip_adapter_process_packet(&adapter, send_rr_buf, send_rr_len, resp_packet, sizeof(resp_packet));
-    assert(resp_len > 0);
+    CHECK(resp_len > 0);
 
     const uint8_t *cip_resp_data = nullptr;
     size_t cip_resp_len = 0;
     eip_encap_header_t resp_hdr;
     eip_decode_encap_header(resp_packet, resp_len, &resp_hdr);
-    assert(resp_hdr.status == EIP_STATUS_SUCCESS);
+    CHECK(resp_hdr.status == EIP_STATUS_SUCCESS);
 
     bool parsed = eip_parse_send_rr_data(&resp_packet[EIP_ENCAP_HEADER_SIZE], resp_hdr.length, &cip_resp_data, &cip_resp_len);
-    assert(parsed);
-    assert(cip_resp_len > 4);
-    assert(cip_resp_data[0] == (CIP_SERVICE_GET_ATTRIBUTE_SINGLE | 0x80));
-    assert(cip_resp_data[2] == CIP_STATUS_SUCCESS);
+    CHECK(parsed);
+    CHECK(cip_resp_len > 4);
+    CHECK(cip_resp_data[0] == (CIP_SERVICE_GET_ATTRIBUTE_SINGLE | 0x80));
+    CHECK(cip_resp_data[2] == CIP_STATUS_SUCCESS);
 
     // 文字列データ検証 (Short String: 1B len + chars)
     uint8_t str_len = cip_resp_data[4];
-    assert(str_len == strlen("Test Adapter Node"));
-    assert(memcmp(&cip_resp_data[5], "Test Adapter Node", str_len) == 0);
+    CHECK(str_len == strlen("Test Adapter Node"));
+    CHECK(memcmp(&cip_resp_data[5], "Test Adapter Node", str_len) == 0);
 
-    std::cout << "[Test] Adapter Session & Identity passed!" << std::endl;
+    std::cout << "# [Test] Adapter Session & Identity passed!" << std::endl;
 }
 
-void test_cpp_adapter_assembly() {
-    std::cout << "[Test] Running C++ Adapter Assembly I/O tests..." << std::endl;
+TEST_CASE(test_cpp_adapter_assembly) {
+    std::cout << "# [Test] Running C++ Adapter Assembly I/O tests..." << std::endl;
 
     embed_eip::Adapter adapter(0x0001, 0x000C, 0x0001, "EIP IO Node");
 
@@ -161,24 +161,10 @@ void test_cpp_adapter_assembly() {
 
     uint32_t read_back = 0;
     bool ok = adapter.get_assembly_pod(100, read_back);
-    assert(ok);
-    assert(read_back == 0x12345678);
+    CHECK(ok);
+    CHECK(read_back == 0x12345678);
 
-    std::cout << "[Test] C++ Adapter Assembly I/O passed!" << std::endl;
+    std::cout << "# [Test] C++ Adapter Assembly I/O passed!" << std::endl;
 }
 
-int main() {
-    std::cout << "========================================" << std::endl;
-    std::cout << " Running embed_eip test suite..." << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    test_encap_header();
-    test_epath_and_cip_messages();
-    test_adapter_session_and_identity();
-    test_cpp_adapter_assembly();
-
-    std::cout << "========================================" << std::endl;
-    std::cout << " All embed_eip tests PASSED successfully!" << std::endl;
-    std::cout << "========================================" << std::endl;
-    return 0;
-}
+EMBED_TEST_MAIN()

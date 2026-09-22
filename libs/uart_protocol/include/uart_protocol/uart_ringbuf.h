@@ -1,64 +1,11 @@
 #pragma once
-#ifndef UART_RINGBUF_H
-#define UART_RINGBUF_H
-
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct {
-    uint8_t *buffer;
-    size_t capacity;
-    volatile size_t head;
-    volatile size_t tail;
-} uart_ringbuf_t;
-
-/**
- * @brief リングバッファを初期化します。
- */
-void uart_ringbuf_init(uart_ringbuf_t *rb, uint8_t *storage, size_t capacity);
-
-/**
- * @brief 1バイト書き込みます。
- */
-bool uart_ringbuf_put(uart_ringbuf_t *rb, uint8_t byte);
-
-/**
- * @brief 複数バイト書き込みます。
- */
-size_t uart_ringbuf_write(uart_ringbuf_t *rb, const uint8_t *data, size_t length);
-
-/**
- * @brief 1バイト読み出します。
- */
-bool uart_ringbuf_get(uart_ringbuf_t *rb, uint8_t *byte);
-
-/**
- * @brief 複数バイト読み出します。
- */
-size_t uart_ringbuf_read(uart_ringbuf_t *rb, uint8_t *dest, size_t max_length);
-
-/**
- * @brief 格納されているデータバイト数を取得します。
- */
-size_t uart_ringbuf_available(const uart_ringbuf_t *rb);
-
-/**
- * @brief 空き容量（バイト数）を取得します。
- */
-size_t uart_ringbuf_free_space(const uart_ringbuf_t *rb);
-
-/**
- * @brief バッファをクリア（空）にします。
- */
-void uart_ringbuf_clear(uart_ringbuf_t *rb);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* UART_RINGBUF_H */
+#include "embed_ringbuf/embed_ringbuf.h"
+typedef embed_ringbuf_t uart_ringbuf_t;
+#define uart_ringbuf_init embed_ringbuf_init
+#define uart_ringbuf_put embed_ringbuf_put
+#define uart_ringbuf_write embed_ringbuf_write
+#define uart_ringbuf_get embed_ringbuf_get
+#define uart_ringbuf_read embed_ringbuf_read
+#define uart_ringbuf_available embed_ringbuf_available
+#define uart_ringbuf_free_space embed_ringbuf_free_space
+#define uart_ringbuf_clear embed_ringbuf_clear

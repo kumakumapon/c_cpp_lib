@@ -25,6 +25,7 @@ bool embed_heap_init(embed_heap_t *heap, void *buffer, size_t buffer_size) {
 
     /* アライメント調整 */
     uintptr_t buf_start = (uintptr_t)buffer;
+    if (buf_start > UINTPTR_MAX - (EMBED_HEAP_DEFAULT_ALIGNMENT - 1) || buffer_size > UINTPTR_MAX - buf_start) return false;
     uintptr_t aligned_start = ALIGN_UP(buf_start, EMBED_HEAP_DEFAULT_ALIGNMENT);
     size_t align_offset = (size_t)(aligned_start - buf_start);
 
@@ -76,6 +77,7 @@ static void *alloc_internal(embed_heap_t *heap, size_t size, size_t alignment) {
         return NULL;
     }
 
+    if (size > SIZE_MAX - (EMBED_HEAP_DEFAULT_ALIGNMENT - 1)) return NULL;
     size_t needed_size = ALIGN_UP(size, EMBED_HEAP_DEFAULT_ALIGNMENT);
     if (needed_size < MIN_BLOCK_PAYLOAD) {
         needed_size = MIN_BLOCK_PAYLOAD;
@@ -90,17 +92,20 @@ static void *alloc_internal(embed_heap_t *heap, size_t size, size_t alignment) {
         if (curr->is_free) {
             uintptr_t block_addr = (uintptr_t)curr;
             uintptr_t payload_addr = block_addr + BLOCK_HEADER_SIZE;
+            if (payload_addr > UINTPTR_MAX - (alignment - 1)) return NULL;
             uintptr_t aligned_payload = ALIGN_UP(payload_addr, alignment);
 
             size_t pad_needed = 0;
             if (aligned_payload != payload_addr) {
                 if (aligned_payload < payload_addr + BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD) {
+                    if (payload_addr > UINTPTR_MAX - BLOCK_HEADER_SIZE - MIN_BLOCK_PAYLOAD ||
+                        payload_addr + BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD > UINTPTR_MAX - (alignment - 1)) return NULL;
                     aligned_payload = ALIGN_UP(payload_addr + BLOCK_HEADER_SIZE + MIN_BLOCK_PAYLOAD, alignment);
                 }
                 pad_needed = (size_t)(aligned_payload - payload_addr);
             }
 
-            if (curr->size >= needed_size + pad_needed) {
+            if (pad_needed <= curr->size && needed_size <= curr->size - pad_needed) {
                 /* アライメントパディングが必要な場合、前方に空きブロックを作成 */
                 if (pad_needed > 0) {
                     embed_heap_block_t *pad_block = curr;
@@ -231,6 +236,7 @@ void embed_heap_free(embed_heap_t *heap, void *ptr) {
 }
 
 void *embed_heap_realloc(embed_heap_t *heap, void *ptr, size_t new_size) {
+    if (!heap || new_size > SIZE_MAX - (EMBED_HEAP_DEFAULT_ALIGNMENT - 1)) return NULL;
     if (!ptr) {
         return embed_heap_alloc(heap, new_size);
     }

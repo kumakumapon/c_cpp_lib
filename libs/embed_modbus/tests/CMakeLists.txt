@@ -10,3 +10,5 @@ target_link_libraries(test_modbus
 target_set_warnings(test_modbus)
 
 add_test(NAME test_modbus COMMAND test_modbus)
+
+target_link_libraries(test_modbus PRIVATE embed_test)

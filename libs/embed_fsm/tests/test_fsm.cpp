@@ -1,5 +1,5 @@
 #include <iostream>
-#include <cassert>
+#include "embed_test/embed_test.hpp"
 #include <vector>
 #include <string>
 
@@ -76,8 +76,8 @@ static fsm_result_t on_event_error(fsm_machine_t *fsm, const fsm_event_t *event,
     return FSM_RET_UNHANDLED;
 }
 
-void test_hierarchical_fsm() {
-    std::cout << "[Test] Running Hierarchical FSM tests..." << std::endl;
+TEST_CASE(test_hierarchical_fsm) {
+    std::cout << "# [Test] Running Hierarchical FSM tests..." << std::endl;
     TestContext ctx;
     embed_fsm::StateMachine fsm(&ctx);
 
@@ -95,41 +95,30 @@ void test_hierarchical_fsm() {
 
     // 1. 起動 -> Idle (Active -> Idle の Enter が実行される)
     fsm.start(STATE_IDLE);
-    assert(fsm.current_state() == STATE_IDLE);
-    assert(fsm.is_in_state(STATE_ACTIVE));
-    assert(fsm.is_in_state(STATE_IDLE));
-    assert(!fsm.is_in_state(STATE_ERROR));
+    CHECK(fsm.current_state() == STATE_IDLE);
+    CHECK(fsm.is_in_state(STATE_ACTIVE));
+    CHECK(fsm.is_in_state(STATE_IDLE));
+    CHECK(!fsm.is_in_state(STATE_ERROR));
 
     // 2. EVT_START: Idle -> Moving (Active は維持され、Idle Exit -> Moving Enter)
-    assert(fsm.dispatch(EVT_START));
-    assert(fsm.current_state() == STATE_MOVING);
-    assert(fsm.is_in_state(STATE_ACTIVE));
-    assert(fsm.is_in_state(STATE_RUNNING));
-    assert(fsm.is_in_state(STATE_MOVING));
+    CHECK(fsm.dispatch(EVT_START));
+    CHECK(fsm.current_state() == STATE_MOVING);
+    CHECK(fsm.is_in_state(STATE_ACTIVE));
+    CHECK(fsm.is_in_state(STATE_RUNNING));
+    CHECK(fsm.is_in_state(STATE_MOVING));
 
     // 3. EVT_FAULT: Moving で未処理のため親の Active にバブルアップ -> Error へ遷移
     // Moving Exit -> Active Exit -> Error Enter
-    assert(fsm.dispatch(EVT_FAULT));
-    assert(fsm.current_state() == STATE_ERROR);
-    assert(!fsm.is_in_state(STATE_ACTIVE));
-    assert(fsm.is_in_state(STATE_ERROR));
+    CHECK(fsm.dispatch(EVT_FAULT));
+    CHECK(fsm.current_state() == STATE_ERROR);
+    CHECK(!fsm.is_in_state(STATE_ACTIVE));
+    CHECK(fsm.is_in_state(STATE_ERROR));
 
     // 4. EVT_RESET: Error -> Idle
-    assert(fsm.dispatch(EVT_RESET));
-    assert(fsm.current_state() == STATE_IDLE);
+    CHECK(fsm.dispatch(EVT_RESET));
+    CHECK(fsm.current_state() == STATE_IDLE);
 
-    std::cout << "[Test] Hierarchical FSM passed! Action trace count: " << ctx.log.size() << std::endl;
+    std::cout << "# [Test] Hierarchical FSM passed! Action trace count: " << ctx.log.size() << std::endl;
 }
 
-int main() {
-    std::cout << "========================================" << std::endl;
-    std::cout << " Running embed_fsm test suite..." << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    test_hierarchical_fsm();
-
-    std::cout << "========================================" << std::endl;
-    std::cout << " All embed_fsm tests PASSED!" << std::endl;
-    std::cout << "========================================" << std::endl;
-    return 0;
-}
+EMBED_TEST_MAIN()

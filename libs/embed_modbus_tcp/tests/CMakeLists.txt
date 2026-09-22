@@ -1,0 +1,4 @@
+add_executable(test_embed_modbus_tcp test_embed_modbus_tcp.cpp)
+target_link_libraries(test_embed_modbus_tcp PRIVATE embed_modbus_tcp embed_test)
+target_set_warnings(test_embed_modbus_tcp)
+add_test(NAME test_embed_modbus_tcp COMMAND test_embed_modbus_tcp)
