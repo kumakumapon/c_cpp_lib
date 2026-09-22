@@ -1,41 +1,42 @@
 # Issue #15 implementation checkpoint
 
-Scope: A-1 through A-9, B-1 through B-6, and shared ring buffer extraction.
-Previously proposed libraries listed only as background in #15 are not part of this change.
+Branch: `feature/issue-15-quality-foundation`
+PR: https://github.com/kumakumapon/c_cpp_lib/pull/16
 
-## Status
-- [x] Requirements inspected; implementation not started at initial checkpoint.
-- [x] A-1/B-1: always-active, allocation-free test framework; migrate tests.
-- [x] A-2/A-3/A-4/A-5: bridge includes, heap overflow, bounded OPC UA codecs, logger locking.
-- [x] A-6/A-7/A-9: CI, install/export/aliases, formatting and build hygiene.
-- [x] A-8/B-2: shared CRC/checksums and ring buffer; migrate protocol consumers.
-- [x] B-3: Modbus TCP and RTU-over-TCP transport.
-- [x] B-4: timer wheel and cooperative scheduler.
-- [x] B-5: portable self-test facilities and hardware hooks.
-- [x] B-6: Q15/Q31 arithmetic, math and generic C++ adapters.
-- [ ] Debug/Release, sanitizers, installed consumer checks and final review.
+## Completed scope
+- [x] A-1/B-1: allocation-free test registry, always-active checks, numeric diagnostics, TAP; all 18 original suites migrated.
+- [x] A-2: direct bridge string header includes.
+- [x] A-3: heap allocation/reallocation/alignment overflow checks and regressions.
+- [x] A-4: bounded OPC UA primitive/composite codecs, server capacity checks, malformed/truncated input tests.
+- [x] A-5: nonrecursive hexdump locking and bounded log formatting.
+- [x] A-6: Linux/Windows Debug/Release, CRC variants, shared libraries, ASan/UBSan and installed-consumer CI.
+- [x] A-7: install/export/package configuration and namespaced aliases.
+- [x] A-8/B-2: shared CRC/checksums and ring buffer; UART/Modbus migrated.
+- [x] A-9: configure-dependent discovery, formatting/static-analysis configuration, string and portability cleanup.
+- [x] B-3: MBAP, per-connection TCP framing, transaction IDs, RTU-over-TCP, bridge register integration.
+- [x] B-4: timer wheel, monotonic clock hook, cooperative round-robin tasks, deadline accounting.
+- [x] B-5: March C-, ROM CRC, CPU hook, stack watermark, watchdog and clock checks.
+- [x] B-6: saturating Q15/Q31 arithmetic, integer math, generic numeric/control adapters.
+- [x] API documentation, migration notes and local validation.
 
-## Resume
-1. Check out feature/issue-15-quality-foundation and inspect git status/log.
-2. Read this checkpoint and the draft PR for completed work and validation results.
-3. Continue unchecked items; commit and push coherent milestones.
-4. Update documentation and PR with actual tests and limitations; mark ready only when complete.
+## Validation evidence
+- MSVC Debug/Release: 25 CTest entries passed.
+- MSVC CRC tables enabled: 25 entries passed.
+- GCC Release on Ubuntu 24.04: 25 entries passed.
+- Installed C++ consumer and C-only consumer both built and ran successfully.
+- CI on implementation commits covers all 11 jobs listed above; final status is recorded in PR checks.
+- The expected-failure NDEBUG test passes only when an intentional check failure returns nonzero.
+- No remaining raw assert calls in test sources; git diff --check clean.
 
-Hardware-specific CPU register diagnostics use target-provided hooks; host tests cannot certify functional safety.
+## Resume / final gate
+1. Check out the branch; inspect git status and current PR checks.
+2. If checks fail, reproduce the failing matrix configuration, fix, commit and push.
+3. Keep this PR draft until every current-head CI job succeeds, then mark ready for review.
+4. The PR body contains the final validation links and compatibility notes. Do not merge automatically.
 
-## Checkpoint 2026-09-22
-Implemented first pass of A-1..A-9 and B-1..B-6, including shared ring buffer.
-MSVC Release: 24 suites passed before boundary regression additions.
-Added explicit NDEBUG expected-failure test, boundary regressions, CI and install consumer.
-Remaining: run full validation, inspect Linux/ASan results, complete bridge TCP integration,
-review edge cases, document APIs/constraints and replace this progress checklist with final evidence.
-Untracked *_issue15.py scripts are one-shot editing helpers: do not rerun them.
-
-
-## Review checkpoint
-All scoped implementations and API documentation are present; bridge TCP integration is tested.
-Local MSVC Debug/Release and GCC Release each passed 25 CTest entries.
-Initial commit CI passed all 11 jobs, including ASan/UBSan and installed consumers.
-Added full OPC UA scalar/NodeId truncation and deterministic malformed-input tests, scheduler
-callback cancellation/overflow tests and Q15/Q31 generic PID tests after that CI run.
-Remaining: verify final CI on this updated code, then mark PR ready for review.
+## API constraints
+OPC UA binary APIs now require explicit buffer lengths (source-level breaking change).
+CPU register self-tests require target-specific hooks; this code does not certify functional safety.
+Ring buffers and shared protocol state require caller synchronization; timer callbacks are cooperative.
+Modbus networking and RTU-over-TCP frame boundaries remain transport-adapter responsibilities.
+Previously proposed libraries mentioned only as background in #15 are outside this issue's scope.
