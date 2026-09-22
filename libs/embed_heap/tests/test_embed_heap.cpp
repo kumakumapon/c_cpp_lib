@@ -1,7 +1,7 @@
-#include <iostream>
-#include <vector>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <vector>
 
 #include "embed_heap/embed_heap.h"
 #include "embed_heap/embed_heap.hpp"
@@ -100,7 +100,10 @@ struct TestObject {
     int x;
     double y;
     TestObject(int a, double b) : x(a), y(b) {}
-    ~TestObject() { x = 0; y = 0.0; }
+    ~TestObject() {
+        x = 0;
+        y = 0.0;
+    }
 };
 
 TEST_CASE(test_cpp_heap_and_allocator) {
@@ -140,17 +143,24 @@ TEST_CASE(test_cpp_heap_and_allocator) {
 }
 
 TEST_CASE(overflow_requests_preserve_heap) {
-    alignas(64) uint8_t storage[4096];embed_heap_t heap{};
-    REQUIRE(embed_heap_init(&heap,storage,sizeof(storage)));
-    auto *p=(uint8_t*)embed_heap_alloc(&heap,16);REQUIRE(p);p[0]=42;
-    for(size_t i=0;i<16;++i) {
-        CHECK(embed_heap_alloc(&heap,SIZE_MAX-i)==nullptr);
-        CHECK(embed_heap_aligned_alloc(&heap,SIZE_MAX-i,64)==nullptr);
-        CHECK(embed_heap_realloc(&heap,p,SIZE_MAX-i)==nullptr);CHECK_EQ(p[0],42);
+    alignas(64) uint8_t storage[4096];
+    embed_heap_t heap{};
+    REQUIRE(embed_heap_init(&heap, storage, sizeof(storage)));
+    auto *p = (uint8_t *)embed_heap_alloc(&heap, 16);
+    REQUIRE(p);
+    p[0] = 42;
+    for (size_t i = 0; i < 16; ++i) {
+        CHECK(embed_heap_alloc(&heap, SIZE_MAX - i) == nullptr);
+        CHECK(embed_heap_aligned_alloc(&heap, SIZE_MAX - i, 64) == nullptr);
+        CHECK(embed_heap_realloc(&heap, p, SIZE_MAX - i) == nullptr);
+        CHECK_EQ(p[0], 42);
     }
-    CHECK(embed_heap_calloc(&heap,SIZE_MAX,2)==nullptr);
-    CHECK(embed_heap_aligned_alloc(&heap,16,size_t(1)<<(sizeof(size_t)*8-1))==nullptr);
-    embed_heap_free(&heap,p);embed_heap_stats_t stats{};CHECK(embed_heap_get_stats(&heap,&stats));CHECK_EQ(stats.alloc_count,0u);
+    CHECK(embed_heap_calloc(&heap, SIZE_MAX, 2) == nullptr);
+    CHECK(embed_heap_aligned_alloc(&heap, 16, size_t(1) << (sizeof(size_t) * 8 - 1)) == nullptr);
+    embed_heap_free(&heap, p);
+    embed_heap_stats_t stats{};
+    CHECK(embed_heap_get_stats(&heap, &stats));
+    CHECK_EQ(stats.alloc_count, 0u);
 }
 
 EMBED_TEST_MAIN()

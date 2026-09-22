@@ -1,7 +1,7 @@
 #pragma once
-#include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -51,7 +51,6 @@ size_t embed_ringbuf_free_space(const embed_ringbuf_t *rb);
  * @brief バッファをクリア（空）にします。
  */
 void embed_ringbuf_clear(embed_ringbuf_t *rb);
-
 
 #ifdef __cplusplus
 }

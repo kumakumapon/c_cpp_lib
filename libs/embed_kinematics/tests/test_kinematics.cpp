@@ -1,14 +1,12 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
 #include <cmath>
+#include <iostream>
 
-#include "embed_kinematics/kinematics_types.h"
-#include "embed_kinematics/kinematics.h"
 #include "embed_kinematics/embed_kinematics.hpp"
+#include "embed_kinematics/kinematics.h"
+#include "embed_kinematics/kinematics_types.h"
 
-static bool approx_eq(float a, float b, float eps = 0.001f) {
-    return fabsf(a - b) <= eps;
-}
+static bool approx_eq(float a, float b, float eps = 0.001f) { return fabsf(a - b) <= eps; }
 
 TEST_CASE(test_diff_drive) {
     std::cout << "# [Test] Running Differential Drive tests..." << std::endl;

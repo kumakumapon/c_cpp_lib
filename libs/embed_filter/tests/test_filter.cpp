@@ -1,10 +1,10 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
 #include <cmath>
+#include <iostream>
 
-#include "embed_filter/filter_types.h"
 #include "embed_filter/embed_filter.h"
 #include "embed_filter/embed_filter.hpp"
+#include "embed_filter/filter_types.h"
 
 TEST_CASE(test_kalman1d) {
     std::cout << "# [Test] Running 1D Kalman Filter tests..." << std::endl;
@@ -69,7 +69,8 @@ TEST_CASE(test_imu_filter) {
     CHECK(fabsf(ea.roll) < 0.05f);
     CHECK(fabsf(ea.pitch) < 0.05f);
 
-    std::cout << "# [Test] IMU Filter passed! (Roll: " << ea.roll << " rad, Pitch: " << ea.pitch << " rad)" << std::endl;
+    std::cout << "# [Test] IMU Filter passed! (Roll: " << ea.roll << " rad, Pitch: " << ea.pitch
+              << " rad)" << std::endl;
 }
 
 EMBED_TEST_MAIN()

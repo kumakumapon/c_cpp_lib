@@ -1,10 +1,10 @@
-#include <iostream>
+#include "embed_canopen/canopen_node.h"
+#include "embed_canopen/canopen_od.h"
+#include "embed_canopen/canopen_types.h"
+#include "embed_canopen/embed_canopen.hpp"
 #include "embed_test/embed_test.hpp"
 #include <cstring>
-#include "embed_canopen/canopen_types.h"
-#include "embed_canopen/canopen_od.h"
-#include "embed_canopen/canopen_node.h"
-#include "embed_canopen/embed_canopen.hpp"
+#include <iostream>
 
 TEST_CASE(test_canopen_od_basic) {
     std::cout << "# [Test] Running CANopen OD basic tests..." << std::endl;
@@ -14,8 +14,10 @@ TEST_CASE(test_canopen_od_basic) {
     uint32_t val32 = 0x12345678;
     uint16_t val16 = 0xABCD;
 
-    CHECK(canopen_od_add_entry(&od, 0x2000, 0x01, OD_TYPE_UINT32, OD_ACCESS_RW, &val32, sizeof(val32)));
-    CHECK(canopen_od_add_entry(&od, 0x2000, 0x02, OD_TYPE_UINT16, OD_ACCESS_RO, &val16, sizeof(val16)));
+    CHECK(canopen_od_add_entry(&od, 0x2000, 0x01, OD_TYPE_UINT32, OD_ACCESS_RW, &val32,
+                               sizeof(val32)));
+    CHECK(canopen_od_add_entry(&od, 0x2000, 0x02, OD_TYPE_UINT16, OD_ACCESS_RO, &val16,
+                               sizeof(val16)));
 
     // Read test
     uint32_t read_val = 0;
@@ -84,7 +86,8 @@ TEST_CASE(test_canopen_sdo_transfer) {
     canopen_node_init(&node, 1, "ServoDrive");
 
     uint32_t target_position = 10000;
-    canopen_od_add_entry(&node.od, 0x607A, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &target_position, sizeof(target_position));
+    canopen_od_add_entry(&node.od, 0x607A, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &target_position,
+                         sizeof(target_position));
 
     // 1. SDO Upload Request (Read 0x607A.0)
     can_frame_t rx_req{};
@@ -147,7 +150,7 @@ TEST_CASE(test_canopen_cpp_wrapper) {
 
     // PDO test: Operational state required
     can_frame_t tx{};
-    CHECK(!node.send_tpdo1((const uint8_t*)"1234", 4, tx)); // Pre-op should reject PDO
+    CHECK(!node.send_tpdo1((const uint8_t *)"1234", 4, tx)); // Pre-op should reject PDO
 
     // Start node
     can_frame_t nmt_cmd{};

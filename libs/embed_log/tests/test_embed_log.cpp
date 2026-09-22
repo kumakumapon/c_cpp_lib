@@ -1,8 +1,8 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #include "embed_log/embed_log.h"
 #include "embed_log/embed_log.hpp"
@@ -10,13 +10,9 @@
 static std::vector<std::string> s_captured_logs;
 static uint32_t s_mock_time_ms = 1000;
 
-static void mock_log_backend(const char *str, size_t, void *) {
-    s_captured_logs.emplace_back(str);
-}
+static void mock_log_backend(const char *str, size_t, void *) { s_captured_logs.emplace_back(str); }
 
-static uint32_t mock_get_time() {
-    return s_mock_time_ms;
-}
+static uint32_t mock_get_time() { return s_mock_time_ms; }
 
 TEST_CASE(test_log_level_filtering) {
     std::cout << "# [Test] Running log level filtering tests..." << std::endl;
@@ -91,16 +87,30 @@ TEST_CASE(test_cpp_stream_logging) {
     std::cout << "# [Test] C++ stream logging passed!" << std::endl;
 }
 
-static unsigned lock_depth=0;
-static void nonrecursive_lock(void*) {CHECK_EQ(lock_depth,0u);++lock_depth;}
-static void nonrecursive_unlock(void*) {CHECK_EQ(lock_depth,1u);--lock_depth;}
-static void bounded_backend(const char *s,size_t n,void*) {CHECK_EQ(std::strlen(s),n);CHECK(n<EMBED_LOG_MAX_LINE_LENGTH);}
+static unsigned lock_depth = 0;
+static void nonrecursive_lock(void *) {
+    CHECK_EQ(lock_depth, 0u);
+    ++lock_depth;
+}
+static void nonrecursive_unlock(void *) {
+    CHECK_EQ(lock_depth, 1u);
+    --lock_depth;
+}
+static void bounded_backend(const char *s, size_t n, void *) {
+    CHECK_EQ(std::strlen(s), n);
+    CHECK(n < EMBED_LOG_MAX_LINE_LENGTH);
+}
 TEST_CASE(nonrecursive_hexdump_and_truncation) {
-    embed_log_init();embed_log_clear_backends();embed_log_add_backend(bounded_backend,nullptr);
-    embed_log_set_lock(nonrecursive_lock,nonrecursive_unlock,nullptr);
-    uint8_t bytes[33]={};embed_log_hexdump(EMBED_LOG_LEVEL_INFO,"T",bytes,sizeof(bytes));CHECK_EQ(lock_depth,0u);
-    std::string long_text(4096,'x');embed_log_write(EMBED_LOG_LEVEL_INFO,long_text.c_str(),"",0,"%s",long_text.c_str());
-    embed_log_set_lock(nullptr,nullptr,nullptr);
+    embed_log_init();
+    embed_log_clear_backends();
+    embed_log_add_backend(bounded_backend, nullptr);
+    embed_log_set_lock(nonrecursive_lock, nonrecursive_unlock, nullptr);
+    uint8_t bytes[33] = {};
+    embed_log_hexdump(EMBED_LOG_LEVEL_INFO, "T", bytes, sizeof(bytes));
+    CHECK_EQ(lock_depth, 0u);
+    std::string long_text(4096, 'x');
+    embed_log_write(EMBED_LOG_LEVEL_INFO, long_text.c_str(), "", 0, "%s", long_text.c_str());
+    embed_log_set_lock(nullptr, nullptr, nullptr);
 }
 
 EMBED_TEST_MAIN()

@@ -1,13 +1,13 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
 
-#include "embed_eip/eip_types.h"
-#include "embed_eip/eip_encap.h"
-#include "embed_eip/eip_cip.h"
 #include "embed_eip/eip_adapter.h"
+#include "embed_eip/eip_cip.h"
+#include "embed_eip/eip_encap.h"
+#include "embed_eip/eip_types.h"
 #include "embed_eip/embed_eip.hpp"
 
 TEST_CASE(test_encap_header) {
@@ -63,7 +63,8 @@ TEST_CASE(test_epath_and_cip_messages) {
 
     // 2. CIP Request Encode / Decode
     uint8_t req_buf[64];
-    size_t req_len = cip_build_get_attribute_single(CIP_CLASS_IDENTITY, 1, 7, req_buf, sizeof(req_buf));
+    size_t req_len =
+        cip_build_get_attribute_single(CIP_CLASS_IDENTITY, 1, 7, req_buf, sizeof(req_buf));
     CHECK(req_len > 0);
 
     cip_request_t req_dec;
@@ -107,7 +108,8 @@ TEST_CASE(test_adapter_session_and_identity) {
     req_packet[req_len++] = 0x00;
 
     uint8_t resp_packet[256];
-    size_t resp_len = eip_adapter_process_packet(&adapter, req_packet, req_len, resp_packet, sizeof(resp_packet));
+    size_t resp_len =
+        eip_adapter_process_packet(&adapter, req_packet, req_len, resp_packet, sizeof(resp_packet));
     CHECK(resp_len == EIP_ENCAP_HEADER_SIZE + 4);
 
     eip_encap_header_t reg_resp_hdr;
@@ -118,13 +120,16 @@ TEST_CASE(test_adapter_session_and_identity) {
 
     // 2. SendRRData: Get_Attribute_Single (Identity Product Name)
     uint8_t cip_req[64];
-    size_t cip_req_len = cip_build_get_attribute_single(CIP_CLASS_IDENTITY, 1, 7, cip_req, sizeof(cip_req));
+    size_t cip_req_len =
+        cip_build_get_attribute_single(CIP_CLASS_IDENTITY, 1, 7, cip_req, sizeof(cip_req));
 
     uint8_t send_rr_buf[256];
-    size_t send_rr_len = eip_build_send_rr_data(session_id, reg_resp_hdr.sender_context, cip_req, cip_req_len, send_rr_buf, sizeof(send_rr_buf));
+    size_t send_rr_len = eip_build_send_rr_data(session_id, reg_resp_hdr.sender_context, cip_req,
+                                                cip_req_len, send_rr_buf, sizeof(send_rr_buf));
     CHECK(send_rr_len > 0);
 
-    resp_len = eip_adapter_process_packet(&adapter, send_rr_buf, send_rr_len, resp_packet, sizeof(resp_packet));
+    resp_len = eip_adapter_process_packet(&adapter, send_rr_buf, send_rr_len, resp_packet,
+                                          sizeof(resp_packet));
     CHECK(resp_len > 0);
 
     const uint8_t *cip_resp_data = nullptr;
@@ -133,7 +138,8 @@ TEST_CASE(test_adapter_session_and_identity) {
     eip_decode_encap_header(resp_packet, resp_len, &resp_hdr);
     CHECK(resp_hdr.status == EIP_STATUS_SUCCESS);
 
-    bool parsed = eip_parse_send_rr_data(&resp_packet[EIP_ENCAP_HEADER_SIZE], resp_hdr.length, &cip_resp_data, &cip_resp_len);
+    bool parsed = eip_parse_send_rr_data(&resp_packet[EIP_ENCAP_HEADER_SIZE], resp_hdr.length,
+                                         &cip_resp_data, &cip_resp_len);
     CHECK(parsed);
     CHECK(cip_resp_len > 4);
     CHECK(cip_resp_data[0] == (CIP_SERVICE_GET_ATTRIBUTE_SINGLE | 0x80));

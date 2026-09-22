@@ -1,14 +1,14 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
 
-#include "embed_mqtt/mqtt_types.h"
+#include "embed_mqtt/embed_mqtt.hpp"
+#include "embed_mqtt/mqtt_client.h"
 #include "embed_mqtt/mqtt_packet.h"
 #include "embed_mqtt/mqtt_topic.h"
-#include "embed_mqtt/mqtt_client.h"
-#include "embed_mqtt/embed_mqtt.hpp"
+#include "embed_mqtt/mqtt_types.h"
 
 TEST_CASE(test_topic_matching) {
     std::cout << "# [Test] Running MQTT topic matching tests..." << std::endl;
@@ -94,10 +94,11 @@ TEST_CASE(test_cpp_client_loopback) {
 
     std::string rx_topic;
     std::string rx_payload;
-    client.set_message_handler([&rx_topic, &rx_payload](const std::string &t, const std::vector<uint8_t> &p, mqtt_qos_t) {
-        rx_topic = t;
-        rx_payload.assign(p.begin(), p.end());
-    });
+    client.set_message_handler(
+        [&rx_topic, &rx_payload](const std::string &t, const std::vector<uint8_t> &p, mqtt_qos_t) {
+            rx_topic = t;
+            rx_payload.assign(p.begin(), p.end());
+        });
 
     // 1. Connect
     client.connect("embed_node_01");

@@ -1,13 +1,13 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #include "uart_protocol/uart_crc.h"
-#include "uart_protocol/uart_ringbuf.h"
 #include "uart_protocol/uart_protocol.h"
 #include "uart_protocol/uart_protocol.hpp"
+#include "uart_protocol/uart_ringbuf.h"
 
 TEST_CASE(test_crc16) {
     std::cout << "# [Test] Running CRC-16 tests..." << std::endl;
@@ -59,9 +59,7 @@ static void mock_tx(const uint8_t *data, size_t length, void *) {
     s_tx_stream.insert(s_tx_stream.end(), data, data + length);
 }
 
-static void mock_rx(const uart_packet_t *packet, void *) {
-    s_rx_packets.push_back(*packet);
-}
+static void mock_rx(const uart_packet_t *packet, void *) { s_rx_packets.push_back(*packet); }
 
 TEST_CASE(test_protocol_encode_decode) {
     std::cout << "# [Test] Running protocol encode/decode tests..." << std::endl;
@@ -142,9 +140,8 @@ TEST_CASE(test_cpp_wrapper) {
     uart_protocol::Protocol nodeA;
     uart_protocol::Protocol nodeB;
 
-    nodeA.set_tx_handler([&pipe](const uint8_t *data, size_t len) {
-        pipe.insert(pipe.end(), data, data + len);
-    });
+    nodeA.set_tx_handler(
+        [&pipe](const uint8_t *data, size_t len) { pipe.insert(pipe.end(), data, data + len); });
 
     nodeB.set_rx_handler([&received_messages](const uart_packet_t &pkt) {
         if (pkt.type == UART_PKT_TYPE_DATA) {

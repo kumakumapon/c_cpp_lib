@@ -1,17 +1,15 @@
-#include <iostream>
-#include <vector>
 #include "embed_test/embed_test.hpp"
 #include <cmath>
+#include <iostream>
+#include <vector>
 
-#include "embed_motion/motion_types.h"
-#include "embed_motion/motion_profile.h"
 #include "embed_motion/embed_motion.hpp"
+#include "embed_motion/motion_profile.h"
+#include "embed_motion/motion_types.h"
 
 #define EPSILON 0.01f
 
-static bool approx_eq(float a, float b, float eps = 0.05f) {
-    return fabsf(a - b) <= eps;
-}
+static bool approx_eq(float a, float b, float eps = 0.05f) { return fabsf(a - b) <= eps; }
 
 TEST_CASE(test_trapezoidal_profile) {
     std::cout << "# [Test] Running Trapezoidal Profile tests..." << std::endl;

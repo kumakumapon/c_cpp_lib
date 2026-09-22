@@ -1,27 +1,27 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
-#include <vector>
+#include <iostream>
 #include <string>
+#include <vector>
 
-#include "embed_fsm/fsm_types.h"
 #include "embed_fsm/embed_fsm.h"
 #include "embed_fsm/embed_fsm.hpp"
+#include "embed_fsm/fsm_types.h"
 
 enum StateId : fsm_state_id_t {
     STATE_ACTIVE = 1,
-    STATE_IDLE   = 2,
+    STATE_IDLE = 2,
     STATE_RUNNING = 3,
-    STATE_MOVING  = 4,
-    STATE_PAUSED  = 5,
-    STATE_ERROR   = 6
+    STATE_MOVING = 4,
+    STATE_PAUSED = 5,
+    STATE_ERROR = 6
 };
 
 enum EventId : fsm_event_id_t {
-    EVT_START  = 10,
-    EVT_PAUSE  = 11,
+    EVT_START = 10,
+    EVT_PAUSE = 11,
     EVT_RESUME = 12,
-    EVT_FAULT  = 99,
-    EVT_RESET  = 100
+    EVT_FAULT = 99,
+    EVT_RESET = 100
 };
 
 struct TestContext {
@@ -36,13 +36,13 @@ static void log_action(fsm_machine_t *, void *user_data, const char *msg) {
 }
 
 static void on_enter_active(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "ENTER:Active"); }
-static void on_exit_active(fsm_machine_t *fsm, void *ud)  { log_action(fsm, ud, "EXIT:Active"); }
-static void on_enter_idle(fsm_machine_t *fsm, void *ud)   { log_action(fsm, ud, "ENTER:Idle"); }
-static void on_exit_idle(fsm_machine_t *fsm, void *ud)    { log_action(fsm, ud, "EXIT:Idle"); }
+static void on_exit_active(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "EXIT:Active"); }
+static void on_enter_idle(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "ENTER:Idle"); }
+static void on_exit_idle(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "EXIT:Idle"); }
 static void on_enter_moving(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "ENTER:Moving"); }
-static void on_exit_moving(fsm_machine_t *fsm, void *ud)  { log_action(fsm, ud, "EXIT:Moving"); }
-static void on_enter_error(fsm_machine_t *fsm, void *ud)  { log_action(fsm, ud, "ENTER:Error"); }
-static void on_exit_error(fsm_machine_t *fsm, void *ud)   { log_action(fsm, ud, "EXIT:Error"); }
+static void on_exit_moving(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "EXIT:Moving"); }
+static void on_enter_error(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "ENTER:Error"); }
+static void on_exit_error(fsm_machine_t *fsm, void *ud) { log_action(fsm, ud, "EXIT:Error"); }
 
 static fsm_result_t on_event_active(fsm_machine_t *fsm, const fsm_event_t *event, void *) {
     if (event->id == EVT_FAULT) {
@@ -86,12 +86,15 @@ TEST_CASE(test_hierarchical_fsm) {
     //      -> Active -> Running -> Moving
     //      -> Active -> Running -> Paused
     //      -> Error
-    fsm.add_state(STATE_ACTIVE,  FSM_STATE_NONE, "Active",  on_enter_active, on_exit_active, on_event_active);
-    fsm.add_state(STATE_IDLE,    STATE_ACTIVE,   "Idle",    on_enter_idle,   on_exit_idle,   on_event_idle);
-    fsm.add_state(STATE_RUNNING, STATE_ACTIVE,   "Running", nullptr,         nullptr,        nullptr);
-    fsm.add_state(STATE_MOVING,  STATE_RUNNING,  "Moving",  on_enter_moving, on_exit_moving, on_event_moving);
-    fsm.add_state(STATE_PAUSED,  STATE_RUNNING,  "Paused",  nullptr,         nullptr,        nullptr);
-    fsm.add_state(STATE_ERROR,   FSM_STATE_NONE, "Error",   on_enter_error,  on_exit_error,  on_event_error);
+    fsm.add_state(STATE_ACTIVE, FSM_STATE_NONE, "Active", on_enter_active, on_exit_active,
+                  on_event_active);
+    fsm.add_state(STATE_IDLE, STATE_ACTIVE, "Idle", on_enter_idle, on_exit_idle, on_event_idle);
+    fsm.add_state(STATE_RUNNING, STATE_ACTIVE, "Running", nullptr, nullptr, nullptr);
+    fsm.add_state(STATE_MOVING, STATE_RUNNING, "Moving", on_enter_moving, on_exit_moving,
+                  on_event_moving);
+    fsm.add_state(STATE_PAUSED, STATE_RUNNING, "Paused", nullptr, nullptr, nullptr);
+    fsm.add_state(STATE_ERROR, FSM_STATE_NONE, "Error", on_enter_error, on_exit_error,
+                  on_event_error);
 
     // 1. 起動 -> Idle (Active -> Idle の Enter が実行される)
     fsm.start(STATE_IDLE);
@@ -118,7 +121,8 @@ TEST_CASE(test_hierarchical_fsm) {
     CHECK(fsm.dispatch(EVT_RESET));
     CHECK(fsm.current_state() == STATE_IDLE);
 
-    std::cout << "# [Test] Hierarchical FSM passed! Action trace count: " << ctx.log.size() << std::endl;
+    std::cout << "# [Test] Hierarchical FSM passed! Action trace count: " << ctx.log.size()
+              << std::endl;
 }
 
 EMBED_TEST_MAIN()

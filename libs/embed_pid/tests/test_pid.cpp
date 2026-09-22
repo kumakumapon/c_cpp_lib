@@ -1,17 +1,15 @@
-#include <iostream>
-#include <vector>
 #include "embed_test/embed_test.hpp"
 #include <cmath>
+#include <iostream>
+#include <vector>
 
-#include "embed_pid/pid_types.h"
-#include "embed_pid/pid_controller.h"
 #include "embed_pid/embed_pid.hpp"
+#include "embed_pid/pid_controller.h"
+#include "embed_pid/pid_types.h"
 
 #define EPSILON 0.0001f
 
-static bool approx_eq(float a, float b, float eps = 0.001f) {
-    return fabsf(a - b) <= eps;
-}
+static bool approx_eq(float a, float b, float eps = 0.001f) { return fabsf(a - b) <= eps; }
 
 TEST_CASE(test_basic_pid_terms) {
     std::cout << "# [Test] Running Basic P, I, D term tests..." << std::endl;
@@ -161,8 +159,8 @@ TEST_CASE(test_cpp_controller_class) {
 
     embed_pid::Controller pid(1.5f, 0.5f, 0.1f, 0.05f);
     pid.set_output_limits(-50.0f, 50.0f)
-       .set_deadband(0.1f)
-       .set_anti_windup(PID_ANTI_WINDUP_CLAMPING);
+        .set_deadband(0.1f)
+        .set_anti_windup(PID_ANTI_WINDUP_CLAMPING);
 
     float sp = 100.0f;
     float pv = 0.0f;

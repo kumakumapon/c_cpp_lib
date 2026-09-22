@@ -1,14 +1,14 @@
-#include <iostream>
-#include <vector>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <vector>
 
-#include "embed_modbus/modbus_types.h"
+#include "embed_modbus/embed_modbus.hpp"
 #include "embed_modbus/modbus_crc.h"
-#include "embed_modbus/modbus_slave.h"
 #include "embed_modbus/modbus_master.h"
 #include "embed_modbus/modbus_rtu.h"
-#include "embed_modbus/embed_modbus.hpp"
+#include "embed_modbus/modbus_slave.h"
+#include "embed_modbus/modbus_types.h"
 
 TEST_CASE(test_modbus_crc) {
     std::cout << "# [Test] Running Modbus CRC16 & LRC tests..." << std::endl;
@@ -30,15 +30,18 @@ TEST_CASE(test_modbus_crc) {
 static uint16_t s_test_holding_regs[100];
 
 static modbus_exception_t mock_read_holding(uint16_t addr, uint16_t count, uint16_t *dest, void *) {
-    if (addr + count > 100) return MODBUS_EX_ILLEGAL_DATA_ADDRESS;
+    if (addr + count > 100)
+        return MODBUS_EX_ILLEGAL_DATA_ADDRESS;
     for (uint16_t i = 0; i < count; ++i) {
         dest[i] = s_test_holding_regs[addr + i];
     }
     return MODBUS_EX_NONE;
 }
 
-static modbus_exception_t mock_write_holding(uint16_t addr, uint16_t count, const uint16_t *src, void *) {
-    if (addr + count > 100) return MODBUS_EX_ILLEGAL_DATA_ADDRESS;
+static modbus_exception_t mock_write_holding(uint16_t addr, uint16_t count, const uint16_t *src,
+                                             void *) {
+    if (addr + count > 100)
+        return MODBUS_EX_ILLEGAL_DATA_ADDRESS;
     for (uint16_t i = 0; i < count; ++i) {
         s_test_holding_regs[addr + i] = src[i];
     }
@@ -76,7 +79,8 @@ TEST_CASE(test_master_slave_holding_registers) {
 
     // 3. Master: 応答デコード
     uint16_t read_values[4];
-    modbus_status_t status = modbus_master_parse_read_registers_resp(resp_pdu, resp_pdu_len, read_values, 4);
+    modbus_status_t status =
+        modbus_master_parse_read_registers_resp(resp_pdu, resp_pdu_len, read_values, 4);
     CHECK(status == MODBUS_OK);
     CHECK(read_values[0] == 1010);
     CHECK(read_values[1] == 1011);
@@ -157,7 +161,8 @@ TEST_CASE(test_cpp_slave_wrapper) {
     uint8_t resp_unit_id = 0;
     const uint8_t *resp_pdu = nullptr;
     size_t resp_pdu_len = 0;
-    modbus_status_t st = modbus_rtu_decode_frame(resp_vec.data(), resp_vec.size(), &resp_unit_id, &resp_pdu, &resp_pdu_len);
+    modbus_status_t st = modbus_rtu_decode_frame(resp_vec.data(), resp_vec.size(), &resp_unit_id,
+                                                 &resp_pdu, &resp_pdu_len);
     CHECK(st == MODBUS_OK);
     CHECK(resp_unit_id == 1);
 

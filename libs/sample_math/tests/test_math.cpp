@@ -1,6 +1,6 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
 #include "sample_math/math_utils.hpp"
+#include <iostream>
 
 TEST_CASE(existing_suite) {
 
@@ -12,6 +12,5 @@ TEST_CASE(existing_suite) {
     CHECK(sample_math::multiply(-2, 5) == -10);
 
     std::cout << "# [Test] All sample_math tests passed!" << std::endl;
-    
 }
 EMBED_TEST_MAIN()

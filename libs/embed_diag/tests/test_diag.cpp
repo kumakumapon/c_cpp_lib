@@ -1,8 +1,8 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
-#include <vector>
 #include <cmath>
 #include <cstring>
+#include <iostream>
+#include <vector>
 
 #include "embed_diag/embed_diag.h"
 #include "embed_diag/embed_diag.hpp"

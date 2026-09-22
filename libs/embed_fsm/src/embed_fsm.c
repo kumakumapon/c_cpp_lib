@@ -2,15 +2,17 @@
 #include <string.h>
 
 void fsm_init(fsm_machine_t *fsm, void *user_data) {
-    if (!fsm) return;
+    if (!fsm)
+        return;
     memset(fsm, 0, sizeof(fsm_machine_t));
     fsm->current_state = FSM_STATE_NONE;
     fsm->target_state = FSM_STATE_NONE;
     fsm->user_data = user_data;
 }
 
-static fsm_state_t* find_state(fsm_machine_t *fsm, fsm_state_id_t id) {
-    if (!fsm || id == FSM_STATE_NONE) return NULL;
+static fsm_state_t *find_state(fsm_machine_t *fsm, fsm_state_id_t id) {
+    if (!fsm || id == FSM_STATE_NONE)
+        return NULL;
     for (size_t i = 0; i < fsm->state_count; ++i) {
         if (fsm->states[i].is_used && fsm->states[i].id == id) {
             return &fsm->states[i];
@@ -20,12 +22,16 @@ static fsm_state_t* find_state(fsm_machine_t *fsm, fsm_state_id_t id) {
 }
 
 bool fsm_add_state(fsm_machine_t *fsm, fsm_state_id_t id, fsm_state_id_t parent_id,
-                   const char *name, fsm_action_fn on_enter, fsm_action_fn on_exit, fsm_event_fn on_event) {
-    if (!fsm || id == FSM_STATE_NONE) return false;
-    if (fsm->state_count >= FSM_MAX_STATES) return false;
+                   const char *name, fsm_action_fn on_enter, fsm_action_fn on_exit,
+                   fsm_event_fn on_event) {
+    if (!fsm || id == FSM_STATE_NONE)
+        return false;
+    if (fsm->state_count >= FSM_MAX_STATES)
+        return false;
 
     // 既存チェック
-    if (find_state(fsm, id) != NULL) return false;
+    if (find_state(fsm, id) != NULL)
+        return false;
 
     fsm_state_t *st = &fsm->states[fsm->state_count++];
     st->id = id;
@@ -46,14 +52,16 @@ bool fsm_add_state(fsm_machine_t *fsm, fsm_state_id_t id, fsm_state_id_t parent_
 }
 
 // 祖先パスを取得 (ルートから指定状態までのパス)
-static size_t get_path_to_root(fsm_machine_t *fsm, fsm_state_id_t id, fsm_state_id_t path[FSM_MAX_STATES]) {
+static size_t get_path_to_root(fsm_machine_t *fsm, fsm_state_id_t id,
+                               fsm_state_id_t path[FSM_MAX_STATES]) {
     size_t count = 0;
     fsm_state_id_t cur = id;
 
     while (cur != FSM_STATE_NONE && count < FSM_MAX_STATES) {
         path[count++] = cur;
         fsm_state_t *st = find_state(fsm, cur);
-        if (!st) break;
+        if (!st)
+            break;
         cur = st->parent_id;
     }
 
@@ -61,9 +69,11 @@ static size_t get_path_to_root(fsm_machine_t *fsm, fsm_state_id_t id, fsm_state_
 }
 
 bool fsm_transition_to(fsm_machine_t *fsm, fsm_state_id_t target_state) {
-    if (!fsm || target_state == FSM_STATE_NONE) return false;
+    if (!fsm || target_state == FSM_STATE_NONE)
+        return false;
     fsm_state_t *target = find_state(fsm, target_state);
-    if (!target) return false;
+    if (!target)
+        return false;
 
     fsm_state_id_t cur_path[FSM_MAX_STATES];
     fsm_state_id_t tgt_path[FSM_MAX_STATES];
@@ -85,7 +95,7 @@ bool fsm_transition_to(fsm_machine_t *fsm, fsm_state_id_t target_state) {
         }
     }
 
-found_lca:
+found_lca:;
     // 1. 現在状態から LCA 直前まで on_exit を実行
     int exit_limit = (lca_cur_idx >= 0) ? lca_cur_idx : (int)cur_depth;
     for (int i = 0; i < exit_limit; ++i) {
@@ -109,20 +119,23 @@ found_lca:
 }
 
 bool fsm_start(fsm_machine_t *fsm, fsm_state_id_t initial_state) {
-    if (!fsm) return false;
+    if (!fsm)
+        return false;
     fsm->current_state = FSM_STATE_NONE;
     return fsm_transition_to(fsm, initial_state);
 }
 
 bool fsm_dispatch(fsm_machine_t *fsm, const fsm_event_t *event) {
-    if (!fsm || !event || fsm->current_state == FSM_STATE_NONE) return false;
+    if (!fsm || !event || fsm->current_state == FSM_STATE_NONE)
+        return false;
 
     fsm_state_id_t cur_id = fsm->current_state;
 
     // 階層を上位に向かってバブルアップ
     while (cur_id != FSM_STATE_NONE) {
         fsm_state_t *st = find_state(fsm, cur_id);
-        if (!st) break;
+        if (!st)
+            break;
 
         if (st->on_event) {
             fsm_result_t res = st->on_event(fsm, event, fsm->user_data);
@@ -142,13 +155,16 @@ fsm_state_id_t fsm_get_current_state(const fsm_machine_t *fsm) {
 }
 
 bool fsm_is_in_state(const fsm_machine_t *fsm, fsm_state_id_t state_id) {
-    if (!fsm || state_id == FSM_STATE_NONE) return false;
+    if (!fsm || state_id == FSM_STATE_NONE)
+        return false;
 
     fsm_state_id_t cur = fsm->current_state;
     while (cur != FSM_STATE_NONE) {
-        if (cur == state_id) return true;
+        if (cur == state_id)
+            return true;
         fsm_state_t *st = find_state((fsm_machine_t *)fsm, cur);
-        if (!st) break;
+        if (!st)
+            break;
         cur = st->parent_id;
     }
     return false;

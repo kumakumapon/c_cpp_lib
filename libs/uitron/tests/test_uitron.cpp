@@ -1,15 +1,13 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
 
 #include "uitron/itron.h"
 #include "uitron/kernel.h"
 #include "uitron/uitron_os.h"
 
 static int g_task1_counter = 0;
-static void task1_entry(void) {
-    g_task1_counter++;
-}
+static void task1_entry(void) { g_task1_counter++; }
 
 TEST_CASE(test_task_management) {
     std::cout << "# [Test] Running task management tests..." << std::endl;

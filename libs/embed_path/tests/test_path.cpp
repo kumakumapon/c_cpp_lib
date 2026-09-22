@@ -1,10 +1,10 @@
-#include <iostream>
 #include "embed_test/embed_test.hpp"
 #include <cmath>
+#include <iostream>
 
-#include "embed_path/path_types.h"
 #include "embed_path/embed_path.h"
 #include "embed_path/embed_path.hpp"
+#include "embed_path/path_types.h"
 
 TEST_CASE(test_astar_search) {
     std::cout << "# [Test] Running A* Grid Planner tests..." << std::endl;
@@ -29,7 +29,8 @@ TEST_CASE(test_astar_search) {
     CHECK(fabsf(traj.points[traj.count - 1].x - 8.5f) < 0.01f);
     CHECK(fabsf(traj.points[traj.count - 1].y - 0.5f) < 0.01f);
 
-    std::cout << "# [Test] A* Grid Planner passed! (Waypoints: " << traj.count << ", Length: " << traj.total_length << "m)" << std::endl;
+    std::cout << "# [Test] A* Grid Planner passed! (Waypoints: " << traj.count
+              << ", Length: " << traj.total_length << "m)" << std::endl;
 }
 
 TEST_CASE(test_pure_pursuit) {

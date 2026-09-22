@@ -1,20 +1,22 @@
+#include "embed_test/embed_test.hpp"
+#include <cmath>
 #include <cstring>
 #include <iostream>
-#include "embed_test/embed_test.hpp"
-#include <vector>
-#include <cmath>
 #include <string>
+#include <vector>
 
-#include "embed_bridge/bridge_types.h"
 #include "embed_bridge/bridge_router.h"
+#include "embed_bridge/bridge_types.h"
 #include "embed_bridge/embed_bridge.hpp"
-#include "embed_opcua/opcua_server.h"
-#include "embed_eip/eip_adapter.h"
 #include "embed_canopen/canopen_node.h"
+#include "embed_eip/eip_adapter.h"
 #include "embed_mqtt/mqtt_client.h"
+#include "embed_opcua/opcua_server.h"
 
 static void mock_mqtt_send(const uint8_t *data, size_t len, void *user_data) {
-    (void)data; (void)len; (void)user_data;
+    (void)data;
+    (void)len;
+    (void)user_data;
 }
 
 TEST_CASE(test_bridge_modbus_to_opcua) {
@@ -61,7 +63,8 @@ TEST_CASE(test_bridge_canopen_and_eip_to_mqtt) {
     canopen_node_t can_node;
     canopen_node_init(&can_node, 1, "Drive1");
     int32_t motor_speed = 1500;
-    canopen_od_add_entry(&can_node.od, 0x606C, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &motor_speed, sizeof(motor_speed));
+    canopen_od_add_entry(&can_node.od, 0x606C, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &motor_speed,
+                         sizeof(motor_speed));
 
     // 2. EtherNet/IP Setup
     cip_identity_attr_t id{};
@@ -146,7 +149,7 @@ TEST_CASE(test_bridge_periodic_and_cov) {
 
     // 2nd tick: 50ms more (total 100ms) -> Periodic fires!
     n = router.tick(50);
-    CHECK(n == 1); // Only Periodic synced (COV didn't change)
+    CHECK(n == 1);               // Only Periodic synced (COV didn't change)
     CHECK(modbus_regs[1] == 20); // 10 * 2
 
     // Now change raw_var
@@ -158,4 +161,22 @@ TEST_CASE(test_bridge_periodic_and_cov) {
     std::cout << "# [Test] Periodic and COV synchronization passed!" << std::endl;
 }
 
+TEST_CASE(modbus_tcp_register_bank) {
+    bridge_router_t router{};
+    bridge_router_init(&router);
+    uint16_t regs[2] = {10, 20};
+    bridge_router_bind_modbus(&router, regs, 2);
+    modbus_slave_t slave{};
+    REQUIRE(bridge_router_init_modbus_slave(&router, &slave, 1));
+    uint8_t req[] = {0, 42, 0, 0, 0, 6, 1, 6, 0, 1, 0, 99}, resp[260];
+    CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 12u);
+    CHECK_EQ(regs[1], 99u);
+    req[7] = 3;
+    req[11] = 1;
+    CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 11u);
+    CHECK_EQ(resp[10], 99u);
+    req[9] = 2;
+    CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 9u);
+    CHECK_EQ(resp[8], MODBUS_EX_ILLEGAL_DATA_ADDRESS);
+}
 EMBED_TEST_MAIN()
