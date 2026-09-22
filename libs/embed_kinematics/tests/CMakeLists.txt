@@ -11,3 +11,5 @@ target_link_libraries(test_kinematics
 target_set_warnings(test_kinematics)
 
 add_test(NAME test_kinematics COMMAND test_kinematics)
+
+target_link_libraries(test_kinematics PRIVATE embed_test)

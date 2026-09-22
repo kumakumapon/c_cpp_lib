@@ -3,10 +3,11 @@
 #define BRIDGE_ROUTER_H
 
 #include "bridge_types.h"
-#include "embed_opcua/opcua_server.h"
-#include "embed_eip/eip_adapter.h"
 #include "embed_canopen/canopen_node.h"
+#include "embed_eip/eip_adapter.h"
+#include "embed_modbus_tcp/embed_modbus_tcp.h"
 #include "embed_mqtt/mqtt_client.h"
+#include "embed_opcua/opcua_server.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,6 +31,10 @@ typedef struct {
  * @brief ルーターインスタンスを初期化します。
  */
 void bridge_router_init(bridge_router_t *router);
+/* Bind a TCP/RTU slave to the same holding register bank used by bridge rules.
+ * Router and register storage must outlive the slave and all connections. */
+bool bridge_router_init_modbus_slave(bridge_router_t *router, modbus_slave_t *slave,
+                                     uint8_t unit_id);
 
 /**
  * @brief Modbus 保持レジスタ配列をバインドします。

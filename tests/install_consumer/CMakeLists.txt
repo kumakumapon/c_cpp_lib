@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(consumer LANGUAGES C CXX)
+find_package(c_cpp_lib CONFIG REQUIRED)
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE c_cpp_lib::embed_bridge c_cpp_lib::uart_protocol c_cpp_lib::embed_fixed c_cpp_lib::embed_selftest c_cpp_lib::embed_modbus_tcp c_cpp_lib::embed_sched)
+enable_testing()
+add_test(NAME installed_consumer COMMAND consumer)

@@ -1,55 +1,55 @@
-#include <iostream>
-#include <vector>
-#include <string>
-#include <cassert>
+#include "embed_test/embed_test.hpp"
 #include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
 
 #include "uart_protocol/uart_crc.h"
-#include "uart_protocol/uart_ringbuf.h"
 #include "uart_protocol/uart_protocol.h"
 #include "uart_protocol/uart_protocol.hpp"
+#include "uart_protocol/uart_ringbuf.h"
 
-void test_crc16() {
-    std::cout << "[Test] Running CRC-16 tests..." << std::endl;
+TEST_CASE(test_crc16) {
+    std::cout << "# [Test] Running CRC-16 tests..." << std::endl;
     const uint8_t test_data[] = "123456789";
     uint16_t crc = uart_crc16_ccitt(test_data, 9, 0xFFFF);
-    assert(crc == 0x29B1);
+    CHECK(crc == 0x29B1);
 
     // バイトごとの更新が一致するか検証
     uint16_t step_crc = 0xFFFF;
     for (size_t i = 0; i < 9; ++i) {
         step_crc = uart_crc16_update(step_crc, test_data[i]);
     }
-    assert(step_crc == 0x29B1);
+    CHECK(step_crc == 0x29B1);
 
-    std::cout << "[Test] CRC-16 passed!" << std::endl;
+    std::cout << "# [Test] CRC-16 passed!" << std::endl;
 }
 
-void test_ringbuf() {
-    std::cout << "[Test] Running RingBuffer tests..." << std::endl;
+TEST_CASE(test_ringbuf) {
+    std::cout << "# [Test] Running RingBuffer tests..." << std::endl;
     uint8_t storage[16];
     uart_ringbuf_t rb;
     uart_ringbuf_init(&rb, storage, sizeof(storage));
 
-    assert(uart_ringbuf_available(&rb) == 0);
-    assert(uart_ringbuf_free_space(&rb) == 15);
+    CHECK(uart_ringbuf_available(&rb) == 0);
+    CHECK(uart_ringbuf_free_space(&rb) == 15);
 
     // 書き込み
     const uint8_t data[] = {1, 2, 3, 4, 5};
     size_t written = uart_ringbuf_write(&rb, data, 5);
-    assert(written == 5);
-    assert(uart_ringbuf_available(&rb) == 5);
+    CHECK(written == 5);
+    CHECK(uart_ringbuf_available(&rb) == 5);
 
     // 読み出し
     uint8_t read_buf[5];
     size_t read_len = uart_ringbuf_read(&rb, read_buf, 5);
-    assert(read_len == 5);
+    CHECK(read_len == 5);
     for (int i = 0; i < 5; ++i) {
-        assert(read_buf[i] == (i + 1));
+        CHECK(read_buf[i] == (i + 1));
     }
-    assert(uart_ringbuf_available(&rb) == 0);
+    CHECK(uart_ringbuf_available(&rb) == 0);
 
-    std::cout << "[Test] RingBuffer passed!" << std::endl;
+    std::cout << "# [Test] RingBuffer passed!" << std::endl;
 }
 
 static std::vector<uint8_t> s_tx_stream;
@@ -59,12 +59,10 @@ static void mock_tx(const uint8_t *data, size_t length, void *) {
     s_tx_stream.insert(s_tx_stream.end(), data, data + length);
 }
 
-static void mock_rx(const uart_packet_t *packet, void *) {
-    s_rx_packets.push_back(*packet);
-}
+static void mock_rx(const uart_packet_t *packet, void *) { s_rx_packets.push_back(*packet); }
 
-void test_protocol_encode_decode() {
-    std::cout << "[Test] Running protocol encode/decode tests..." << std::endl;
+TEST_CASE(test_protocol_encode_decode) {
+    std::cout << "# [Test] Running protocol encode/decode tests..." << std::endl;
     s_tx_stream.clear();
     s_rx_packets.clear();
 
@@ -75,16 +73,16 @@ void test_protocol_encode_decode() {
     const uint8_t payload[] = "Hello UART Protocol!";
     uint16_t payload_len = (uint16_t)strlen((const char *)payload);
     bool ok = uart_proto_send(&proto, UART_PKT_TYPE_DATA, payload, payload_len);
-    assert(ok);
-    assert(!s_tx_stream.empty());
+    CHECK(ok);
+    CHECK(!s_tx_stream.empty());
 
     // 2. 送信されたストリームを受信側に流し込む
     uart_proto_process_bytes(&proto, s_tx_stream.data(), s_tx_stream.size());
 
-    assert(s_rx_packets.size() == 1);
-    assert(s_rx_packets[0].type == UART_PKT_TYPE_DATA);
-    assert(s_rx_packets[0].length == payload_len);
-    assert(memcmp(s_rx_packets[0].payload, payload, payload_len) == 0);
+    CHECK(s_rx_packets.size() == 1);
+    CHECK(s_rx_packets[0].type == UART_PKT_TYPE_DATA);
+    CHECK(s_rx_packets[0].length == payload_len);
+    CHECK(memcmp(s_rx_packets[0].payload, payload, payload_len) == 0);
 
     // 3. ACK送信
     s_tx_stream.clear();
@@ -92,16 +90,16 @@ void test_protocol_encode_decode() {
     uart_proto_send_ack(&proto, 42);
     uart_proto_process_bytes(&proto, s_tx_stream.data(), s_tx_stream.size());
 
-    assert(s_rx_packets.size() == 1);
-    assert(s_rx_packets[0].type == UART_PKT_TYPE_ACK);
-    assert(s_rx_packets[0].length == 1);
-    assert(s_rx_packets[0].payload[0] == 42);
+    CHECK(s_rx_packets.size() == 1);
+    CHECK(s_rx_packets[0].type == UART_PKT_TYPE_ACK);
+    CHECK(s_rx_packets[0].length == 1);
+    CHECK(s_rx_packets[0].payload[0] == 42);
 
-    std::cout << "[Test] Protocol encode/decode passed!" << std::endl;
+    std::cout << "# [Test] Protocol encode/decode passed!" << std::endl;
 }
 
-void test_protocol_noise_and_crc_error() {
-    std::cout << "[Test] Running noise and CRC error tests..." << std::endl;
+TEST_CASE(test_protocol_noise_and_crc_error) {
+    std::cout << "# [Test] Running noise and CRC error tests..." << std::endl;
     s_tx_stream.clear();
     s_rx_packets.clear();
 
@@ -125,26 +123,25 @@ void test_protocol_noise_and_crc_error() {
     uart_proto_process_bytes(&proto, noisy_stream.data(), noisy_stream.size());
 
     // パケットは破棄され、コールバックは呼ばれない
-    assert(s_rx_packets.empty());
+    CHECK(s_rx_packets.empty());
 
     uart_proto_stats_t stats{};
     uart_proto_get_stats(&proto, &stats);
-    assert(stats.rx_crc_errors == 1);
+    CHECK(stats.rx_crc_errors == 1);
 
-    std::cout << "[Test] Noise and CRC error passed!" << std::endl;
+    std::cout << "# [Test] Noise and CRC error passed!" << std::endl;
 }
 
-void test_cpp_wrapper() {
-    std::cout << "[Test] Running C++ Protocol wrapper tests..." << std::endl;
+TEST_CASE(test_cpp_wrapper) {
+    std::cout << "# [Test] Running C++ Protocol wrapper tests..." << std::endl;
     std::vector<uint8_t> pipe;
     std::vector<std::string> received_messages;
 
     uart_protocol::Protocol nodeA;
     uart_protocol::Protocol nodeB;
 
-    nodeA.set_tx_handler([&pipe](const uint8_t *data, size_t len) {
-        pipe.insert(pipe.end(), data, data + len);
-    });
+    nodeA.set_tx_handler(
+        [&pipe](const uint8_t *data, size_t len) { pipe.insert(pipe.end(), data, data + len); });
 
     nodeB.set_rx_handler([&received_messages](const uart_packet_t &pkt) {
         if (pkt.type == UART_PKT_TYPE_DATA) {
@@ -157,25 +154,10 @@ void test_cpp_wrapper() {
     // pipeからNodeBへ転送
     nodeB.process_bytes(pipe);
 
-    assert(received_messages.size() == 1);
-    assert(received_messages[0] == "Message from Node A to Node B");
+    CHECK(received_messages.size() == 1);
+    CHECK(received_messages[0] == "Message from Node A to Node B");
 
-    std::cout << "[Test] C++ Protocol wrapper passed!" << std::endl;
+    std::cout << "# [Test] C++ Protocol wrapper passed!" << std::endl;
 }
 
-int main() {
-    std::cout << "========================================" << std::endl;
-    std::cout << " Running uart_protocol test suite..." << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    test_crc16();
-    test_ringbuf();
-    test_protocol_encode_decode();
-    test_protocol_noise_and_crc_error();
-    test_cpp_wrapper();
-
-    std::cout << "========================================" << std::endl;
-    std::cout << " All uart_protocol tests PASSED successfully!" << std::endl;
-    std::cout << "========================================" << std::endl;
-    return 0;
-}
+EMBED_TEST_MAIN()

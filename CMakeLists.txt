@@ -47,4 +47,18 @@ include(CTest) # defines BUILD_TESTING option (ON by default)
 add_subdirectory(libs)
 
 # 2. Applications (アプリケーション群)
-add_subdirectory(apps)
+option(BUILD_APPS "Build demonstration applications" ON)
+if(BUILD_APPS)
+    add_subdirectory(apps)
+endif()
+
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)
+configure_package_config_file(cmake/c_cpp_libConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/c_cpp_libConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/c_cpp_lib)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/c_cpp_libConfigVersion.cmake
+    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(EXPORT c_cpp_libTargets NAMESPACE c_cpp_lib:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/c_cpp_lib)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/c_cpp_libConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/c_cpp_libConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/c_cpp_lib)

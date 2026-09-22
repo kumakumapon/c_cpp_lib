@@ -11,3 +11,5 @@ target_link_libraries(test_canopen
 target_set_warnings(test_canopen)
 
 add_test(NAME test_canopen COMMAND test_canopen)
+
+target_link_libraries(test_canopen PRIVATE embed_test)

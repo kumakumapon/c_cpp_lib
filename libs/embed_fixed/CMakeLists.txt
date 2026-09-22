@@ -1,0 +1,6 @@
+add_library(embed_fixed src/embed_fixed.c)
+target_include_directories(embed_fixed PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_set_warnings(embed_fixed)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

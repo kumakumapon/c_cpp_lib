@@ -1,26 +1,30 @@
 #include "embed_eip/eip_adapter.h"
+#include <stdio.h>
 #include <string.h>
 
 void eip_adapter_init(eip_adapter_t *adapter, const cip_identity_attr_t *identity) {
-    if (!adapter) return;
+    if (!adapter)
+        return;
     memset(adapter, 0, sizeof(eip_adapter_t));
     if (identity) {
         adapter->identity = *identity;
     } else {
-        adapter->identity.vendor_id = 0x0001; // Default
+        adapter->identity.vendor_id = 0x0001;   // Default
         adapter->identity.device_type = 0x000C; // Communications Adapter
         adapter->identity.product_code = 0x0001;
         adapter->identity.major_revision = 1;
         adapter->identity.minor_revision = 0;
         adapter->identity.status = 0x0060;
         adapter->identity.serial_number = 0x12345678;
-        strcpy(adapter->identity.product_name, "Embedded EIP Adapter");
+        snprintf(adapter->identity.product_name, sizeof(adapter->identity.product_name), "%s",
+                 "Embedded EIP Adapter");
     }
     adapter->next_session_id = 0x1000;
 }
 
 bool eip_adapter_add_assembly(eip_adapter_t *adapter, uint16_t instance_id, size_t size) {
-    if (!adapter || size > EIP_MAX_ASSEMBLY_SIZE) return false;
+    if (!adapter || size > EIP_MAX_ASSEMBLY_SIZE)
+        return false;
 
     for (size_t i = 0; i < EIP_MAX_ASSEMBLIES; ++i) {
         if (!adapter->assemblies[i].is_used) {
@@ -34,12 +38,15 @@ bool eip_adapter_add_assembly(eip_adapter_t *adapter, uint16_t instance_id, size
     return false;
 }
 
-bool eip_adapter_set_assembly_data(eip_adapter_t *adapter, uint16_t instance_id, const void *data, size_t size) {
-    if (!adapter || !data) return false;
+bool eip_adapter_set_assembly_data(eip_adapter_t *adapter, uint16_t instance_id, const void *data,
+                                   size_t size) {
+    if (!adapter || !data)
+        return false;
 
     for (size_t i = 0; i < EIP_MAX_ASSEMBLIES; ++i) {
         if (adapter->assemblies[i].is_used && adapter->assemblies[i].instance_id == instance_id) {
-            size_t copy_sz = size < adapter->assemblies[i].size ? size : adapter->assemblies[i].size;
+            size_t copy_sz =
+                size < adapter->assemblies[i].size ? size : adapter->assemblies[i].size;
             memcpy(adapter->assemblies[i].data, data, copy_sz);
             return true;
         }
@@ -47,8 +54,10 @@ bool eip_adapter_set_assembly_data(eip_adapter_t *adapter, uint16_t instance_id,
     return false;
 }
 
-bool eip_adapter_get_assembly_data(const eip_adapter_t *adapter, uint16_t instance_id, void *dest, size_t *size) {
-    if (!adapter || !dest || !size) return false;
+bool eip_adapter_get_assembly_data(const eip_adapter_t *adapter, uint16_t instance_id, void *dest,
+                                   size_t *size) {
+    if (!adapter || !dest || !size)
+        return false;
 
     for (size_t i = 0; i < EIP_MAX_ASSEMBLIES; ++i) {
         if (adapter->assemblies[i].is_used && adapter->assemblies[i].instance_id == instance_id) {
@@ -73,7 +82,8 @@ static uint32_t register_session(eip_adapter_t *adapter) {
 
 static bool validate_session(const eip_adapter_t *adapter, uint32_t session_handle) {
     for (size_t i = 0; i < EIP_MAX_SESSIONS; ++i) {
-        if (adapter->sessions[i].is_active && adapter->sessions[i].session_handle == session_handle) {
+        if (adapter->sessions[i].is_active &&
+            adapter->sessions[i].session_handle == session_handle) {
             return true;
         }
     }
@@ -82,15 +92,15 @@ static bool validate_session(const eip_adapter_t *adapter, uint32_t session_hand
 
 static void unregister_session(eip_adapter_t *adapter, uint32_t session_handle) {
     for (size_t i = 0; i < EIP_MAX_SESSIONS; ++i) {
-        if (adapter->sessions[i].is_active && adapter->sessions[i].session_handle == session_handle) {
+        if (adapter->sessions[i].is_active &&
+            adapter->sessions[i].session_handle == session_handle) {
             adapter->sessions[i].is_active = false;
             return;
         }
     }
 }
 
-static size_t process_cip_message(eip_adapter_t *adapter,
-                                  const uint8_t *cip_req, size_t req_len,
+static size_t process_cip_message(eip_adapter_t *adapter, const uint8_t *cip_req, size_t req_len,
                                   uint8_t *cip_resp, size_t max_resp_len) {
     cip_request_t req;
     if (!cip_decode_request(cip_req, req_len, &req)) {
@@ -180,12 +190,14 @@ static size_t process_cip_message(eip_adapter_t *adapter,
             return cip_encode_response(&resp, cip_resp, max_resp_len);
         }
 
-        if (req.service == CIP_SERVICE_GET_ATTRIBUTE_SINGLE && req.path.attribute_id == 3 /* Data */) {
+        if (req.service == CIP_SERVICE_GET_ATTRIBUTE_SINGLE &&
+            req.path.attribute_id == 3 /* Data */) {
             resp.general_status = CIP_STATUS_SUCCESS;
             resp.data = target_asm->data;
             resp.data_len = target_asm->size;
             return cip_encode_response(&resp, cip_resp, max_resp_len);
-        } else if (req.service == CIP_SERVICE_SET_ATTRIBUTE_SINGLE && req.path.attribute_id == 3 /* Data */) {
+        } else if (req.service == CIP_SERVICE_SET_ATTRIBUTE_SINGLE &&
+                   req.path.attribute_id == 3 /* Data */) {
             size_t copy_sz = req.data_len < target_asm->size ? req.data_len : target_asm->size;
             memcpy(target_asm->data, req.data, copy_sz);
             resp.general_status = CIP_STATUS_SUCCESS;
@@ -203,10 +215,10 @@ static size_t process_cip_message(eip_adapter_t *adapter,
     return cip_encode_response(&resp, cip_resp, max_resp_len);
 }
 
-size_t eip_adapter_process_packet(eip_adapter_t *adapter,
-                                  const uint8_t *req_data, size_t req_len,
+size_t eip_adapter_process_packet(eip_adapter_t *adapter, const uint8_t *req_data, size_t req_len,
                                   uint8_t *resp_data, size_t max_resp_len) {
-    if (!adapter || !req_data || req_len < EIP_ENCAP_HEADER_SIZE || !resp_data) return 0;
+    if (!adapter || !req_data || req_len < EIP_ENCAP_HEADER_SIZE || !resp_data)
+        return 0;
 
     eip_encap_header_t hdr;
     eip_decode_encap_header(req_data, req_len, &hdr);
@@ -221,7 +233,8 @@ size_t eip_adapter_process_packet(eip_adapter_t *adapter,
             hdr.status = EIP_STATUS_NO_MEMORY;
             return eip_encode_encap_header(&hdr, resp_data);
         }
-        return eip_build_register_session_resp(session, hdr.sender_context, resp_data, max_resp_len);
+        return eip_build_register_session_resp(session, hdr.sender_context, resp_data,
+                                               max_resp_len);
     }
 
     /* ---------------------------------------------------------
@@ -244,16 +257,19 @@ size_t eip_adapter_process_packet(eip_adapter_t *adapter,
 
         const uint8_t *cip_data = NULL;
         size_t cip_len = 0;
-        if (!eip_parse_send_rr_data(&req_data[EIP_ENCAP_HEADER_SIZE], hdr.length, &cip_data, &cip_len)) {
+        if (!eip_parse_send_rr_data(&req_data[EIP_ENCAP_HEADER_SIZE], hdr.length, &cip_data,
+                                    &cip_len)) {
             hdr.status = EIP_STATUS_INCORRECT_DATA;
             hdr.length = 0;
             return eip_encode_encap_header(&hdr, resp_data);
         }
 
         uint8_t cip_resp[EIP_MAX_PACKET_SIZE];
-        size_t cip_resp_len = process_cip_message(adapter, cip_data, cip_len, cip_resp, sizeof(cip_resp));
+        size_t cip_resp_len =
+            process_cip_message(adapter, cip_data, cip_len, cip_resp, sizeof(cip_resp));
 
-        return eip_build_send_rr_data(hdr.session_handle, hdr.sender_context, cip_resp, cip_resp_len, resp_data, max_resp_len);
+        return eip_build_send_rr_data(hdr.session_handle, hdr.sender_context, cip_resp,
+                                      cip_resp_len, resp_data, max_resp_len);
     }
 
     default:

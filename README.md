@@ -154,3 +154,59 @@ ctest --test-dir build -C Release --output-on-failure
 | :--- | :--- | :--- |
 | `BUILD_TESTING` | `ON` | 単体テストのビルドを有効化 |
 | `BUILD_SHARED_LIBS` | `OFF` | 静的ライブラリではなく共有ライブラリ (.dll/.so) としてビルド |
+
+## 品質基盤と追加ユーティリティ（#15）
+
+全テストはReleaseでも検査を実行します。CIはLinux/Windows、Debug/Release、CRC方式、
+共有ライブラリ、ASan/UBSan、インストール後の利用を検証します。
+
+| ライブラリ | 用途 |
+| --- | --- |
+| [embed_test](libs/embed_test/README.md) | 自動登録・TAP出力・常時有効な検査 |
+| [embed_crc](libs/embed_crc/README.md) | 6種類のCRC、Fletcher/Adler、ストリーミング |
+| [embed_ringbuf](libs/embed_ringbuf/README.md) | UART非依存のバイトリング |
+| [embed_modbus_tcp](libs/embed_modbus_tcp/README.md) | MBAP、接続別フレーミング、RTU-over-TCP |
+| [embed_sched](libs/embed_sched/README.md) | タイマホイール、協調実行、期限監視 |
+| [embed_selftest](libs/embed_selftest/README.md) | RAM/ROM/スタック/時計/ウォッチドッグ診断 |
+| [embed_fixed](libs/embed_fixed/README.md) | Q15/Q31演算、数学関数、制御アダプター |
+
+### 外部プロジェクトへのインストール
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+cmake --install build --config Release --prefix /path/to/prefix
+```
+
+利用側のCMake:
+
+```cmake
+find_package(c_cpp_lib CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE c_cpp_lib::embed_pid c_cpp_lib::embed_modbus_tcp)
+```
+
+利用側を `-DCMAKE_PREFIX_PATH=/path/to/prefix` で構成します。
+`add_subdirectory` 利用でも同じ名前空間付きターゲットを使えます。
+`BUILD_APPS=OFF` でデモを省略、`BUILD_TESTING=OFF` でテストを省略できます。
+`EMBED_CRC_TABLES=ON` でCRCのROM/速度トレードオフを選びます。
+共有ライブラリの場合はインストール先のbin/libを実行時ローダーの探索先へ追加します。
+
+### OPC UA APIの移行
+
+バイナリのencode全関数に末尾の出力容量、decodeの基本・複合型関数には
+送信元ポインタの直後の入力長を追加しました。成功時は処理バイト数、不正値・残量不足では0です。
+既存のTCP decode関数は従来どおり長さを受け取ります。
+
+```c
+size_t n = opcua_encode_variant(&value, buffer, sizeof(buffer));
+if (n != 0) {
+    size_t consumed = opcua_decode_variant(buffer, n, &decoded);
+}
+```
+
+失敗時は出力内容が途中まで変更される場合があるため、戻り値0の出力は破棄してください。
+文字列が格納先に収まらない場合も失敗とし、黙って切り詰めません。
+配列Variant、拡張NodeId、未対応DataValueフィールドは拒否します。
+この変更はメモリ安全性の修正であり、既存の簡略化されたOPC UAサービスを完全な仕様実装へ
+拡張するものではありません。既存の呼び出し元は再コンパイルが必要です。

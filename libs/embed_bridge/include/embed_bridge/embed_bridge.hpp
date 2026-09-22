@@ -2,47 +2,35 @@
 #ifndef EMBED_BRIDGE_HPP
 #define EMBED_BRIDGE_HPP
 
-#include "bridge_types.h"
 #include "bridge_router.h"
+#include "bridge_types.h"
+#include <cstring>
 #include <string>
 #include <vector>
 
 namespace embed_bridge {
 
 class Router {
-public:
-    Router() {
-        bridge_router_init(&router_);
-    }
+  public:
+    Router() { bridge_router_init(&router_); }
 
     void bind_modbus(uint16_t *holding_regs, size_t reg_count) {
         bridge_router_bind_modbus(&router_, holding_regs, reg_count);
     }
 
-    void bind_opcua(opcua_server_t *server) {
-        bridge_router_bind_opcua(&router_, server);
-    }
+    void bind_opcua(opcua_server_t *server) { bridge_router_bind_opcua(&router_, server); }
 
-    void bind_eip(eip_adapter_t *adapter) {
-        bridge_router_bind_eip(&router_, adapter);
-    }
+    void bind_eip(eip_adapter_t *adapter) { bridge_router_bind_eip(&router_, adapter); }
 
-    void bind_canopen(canopen_node_t *node) {
-        bridge_router_bind_canopen(&router_, node);
-    }
+    void bind_canopen(canopen_node_t *node) { bridge_router_bind_canopen(&router_, node); }
 
-    void bind_mqtt(mqtt_client_t *client) {
-        bridge_router_bind_mqtt(&router_, client);
-    }
+    void bind_mqtt(mqtt_client_t *client) { bridge_router_bind_mqtt(&router_, client); }
 
-    int add_rule(const bridge_rule_t &rule) {
-        return bridge_router_add_rule(&router_, &rule);
-    }
+    int add_rule(const bridge_rule_t &rule) { return bridge_router_add_rule(&router_, &rule); }
 
     int map_modbus_to_opcua(uint16_t modbus_addr, const opcua_nodeid_t &node_id,
-                            bridge_data_type_t dst_type = BRIDGE_TYPE_FLOAT,
-                            float scale = 1.0f, float offset = 0.0f,
-                            bridge_sync_mode_t sync_mode = BRIDGE_SYNC_ALWAYS,
+                            bridge_data_type_t dst_type = BRIDGE_TYPE_FLOAT, float scale = 1.0f,
+                            float offset = 0.0f, bridge_sync_mode_t sync_mode = BRIDGE_SYNC_ALWAYS,
                             uint32_t interval_ms = 0) {
         bridge_rule_t rule{};
         rule.src.proto = BRIDGE_PROTO_MODBUS_REG;
@@ -59,9 +47,8 @@ public:
     }
 
     int map_opcua_to_modbus(const opcua_nodeid_t &node_id, uint16_t modbus_addr,
-                            bridge_data_type_t src_type = BRIDGE_TYPE_FLOAT,
-                            float scale = 1.0f, float offset = 0.0f,
-                            bridge_sync_mode_t sync_mode = BRIDGE_SYNC_ALWAYS,
+                            bridge_data_type_t src_type = BRIDGE_TYPE_FLOAT, float scale = 1.0f,
+                            float offset = 0.0f, bridge_sync_mode_t sync_mode = BRIDGE_SYNC_ALWAYS,
                             uint32_t interval_ms = 0) {
         bridge_rule_t rule{};
         rule.src.proto = BRIDGE_PROTO_OPCUA_NODE;
@@ -115,18 +102,14 @@ public:
         return bridge_router_add_rule(&router_, &rule);
     }
 
-    size_t sync_all() {
-        return bridge_router_sync_all(&router_);
-    }
+    size_t sync_all() { return bridge_router_sync_all(&router_); }
 
-    size_t tick(uint32_t elapsed_ms) {
-        return bridge_router_tick(&router_, elapsed_ms);
-    }
+    size_t tick(uint32_t elapsed_ms) { return bridge_router_tick(&router_, elapsed_ms); }
 
-    bridge_router_t* raw_handle() { return &router_; }
-    const bridge_router_t* raw_handle() const { return &router_; }
+    bridge_router_t *raw_handle() { return &router_; }
+    const bridge_router_t *raw_handle() const { return &router_; }
 
-private:
+  private:
     bridge_router_t router_{};
 };
 

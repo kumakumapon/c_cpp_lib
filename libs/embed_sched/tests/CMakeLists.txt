@@ -1,0 +1,4 @@
+add_executable(test_embed_sched test_embed_sched.cpp)
+target_link_libraries(test_embed_sched PRIVATE embed_sched embed_test)
+target_set_warnings(test_embed_sched)
+add_test(NAME test_embed_sched COMMAND test_embed_sched)

@@ -1,0 +1,4 @@
+add_executable(test_embed_crc test_embed_crc.cpp)
+target_link_libraries(test_embed_crc PRIVATE embed_crc embed_test)
+target_set_warnings(test_embed_crc)
+add_test(NAME test_embed_crc COMMAND test_embed_crc)

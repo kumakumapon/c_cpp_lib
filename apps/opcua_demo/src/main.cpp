@@ -1,13 +1,13 @@
-#include <iostream>
-#include <vector>
-#include <string>
 #include <cstdio>
 #include <iomanip>
+#include <iostream>
+#include <string>
+#include <vector>
 
-#include "embed_opcua/opcua_types.h"
+#include "embed_opcua/embed_opcua.hpp"
 #include "embed_opcua/opcua_binary.h"
 #include "embed_opcua/opcua_server.h"
-#include "embed_opcua/embed_opcua.hpp"
+#include "embed_opcua/opcua_types.h"
 
 static void print_binary_frame(const char *label, const uint8_t *data, size_t len) {
     std::printf("  %s (%zu bytes): ", label, len);
@@ -51,7 +51,7 @@ int main() {
         strcpy(client_hello.endpoint_url, "opc.tcp://192.168.1.100:4840");
 
         uint8_t hello_buf[256];
-        size_t hello_len = opcua_encode_hello(&client_hello, hello_buf);
+        size_t hello_len = opcua_encode_hello(&client_hello, hello_buf, sizeof(hello_buf));
         print_binary_frame("[Client -> HEL]", hello_buf, hello_len);
 
         // サーバーが処理して ACK を返信
@@ -90,7 +90,8 @@ int main() {
 
         opcua_datavalue_t updated_dv{};
         server.get_value(1, 1001, updated_dv);
-        std::printf("  [Verified] New MotorSpeed_RPM: %.1f RPM\n", updated_dv.value.value.double_val);
+        std::printf("  [Verified] New MotorSpeed_RPM: %.1f RPM\n",
+                    updated_dv.value.value.double_val);
     }
 
     std::cout << "\n=====================================================" << std::endl;

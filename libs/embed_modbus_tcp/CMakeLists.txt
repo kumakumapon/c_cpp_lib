@@ -1,0 +1,7 @@
+add_library(embed_modbus_tcp src/embed_modbus_tcp.c)
+target_include_directories(embed_modbus_tcp PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_set_warnings(embed_modbus_tcp)
+target_link_libraries(embed_modbus_tcp PUBLIC embed_modbus)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

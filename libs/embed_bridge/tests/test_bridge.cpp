@@ -1,23 +1,26 @@
-#include <iostream>
-#include <cassert>
-#include <vector>
+#include "embed_test/embed_test.hpp"
 #include <cmath>
+#include <cstring>
+#include <iostream>
 #include <string>
+#include <vector>
 
-#include "embed_bridge/bridge_types.h"
 #include "embed_bridge/bridge_router.h"
+#include "embed_bridge/bridge_types.h"
 #include "embed_bridge/embed_bridge.hpp"
-#include "embed_opcua/opcua_server.h"
-#include "embed_eip/eip_adapter.h"
 #include "embed_canopen/canopen_node.h"
+#include "embed_eip/eip_adapter.h"
 #include "embed_mqtt/mqtt_client.h"
+#include "embed_opcua/opcua_server.h"
 
 static void mock_mqtt_send(const uint8_t *data, size_t len, void *user_data) {
-    (void)data; (void)len; (void)user_data;
+    (void)data;
+    (void)len;
+    (void)user_data;
 }
 
-void test_bridge_modbus_to_opcua() {
-    std::cout << "[Test] Running Modbus -> OPC-UA bridge tests..." << std::endl;
+TEST_CASE(test_bridge_modbus_to_opcua) {
+    std::cout << "# [Test] Running Modbus -> OPC-UA bridge tests..." << std::endl;
 
     uint16_t modbus_regs[10] = {0};
     modbus_regs[2] = 250; // 25.0 degC * 10
@@ -43,24 +46,25 @@ void test_bridge_modbus_to_opcua() {
     router.map_modbus_to_opcua(2, temp_node, BRIDGE_TYPE_FLOAT, 0.1f, 0.0f);
 
     size_t synced = router.sync_all();
-    assert(synced == 1);
+    CHECK(synced == 1);
 
     opcua_datavalue_t dv{};
-    assert(opcua_server_read_value(&server, &temp_node, &dv));
-    assert(dv.value.type == OPCUA_TYPE_FLOAT);
-    assert(fabsf(dv.value.value.float_val - 25.0f) < 0.001f);
+    CHECK(opcua_server_read_value(&server, &temp_node, &dv));
+    CHECK(dv.value.type == OPCUA_TYPE_FLOAT);
+    CHECK(fabsf(dv.value.value.float_val - 25.0f) < 0.001f);
 
-    std::cout << "[Test] Modbus -> OPC-UA bridge passed!" << std::endl;
+    std::cout << "# [Test] Modbus -> OPC-UA bridge passed!" << std::endl;
 }
 
-void test_bridge_canopen_and_eip_to_mqtt() {
-    std::cout << "[Test] Running CANopen & EIP -> MQTT bridge tests..." << std::endl;
+TEST_CASE(test_bridge_canopen_and_eip_to_mqtt) {
+    std::cout << "# [Test] Running CANopen & EIP -> MQTT bridge tests..." << std::endl;
 
     // 1. CANopen Setup
     canopen_node_t can_node;
     canopen_node_init(&can_node, 1, "Drive1");
     int32_t motor_speed = 1500;
-    canopen_od_add_entry(&can_node.od, 0x606C, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &motor_speed, sizeof(motor_speed));
+    canopen_od_add_entry(&can_node.od, 0x606C, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &motor_speed,
+                         sizeof(motor_speed));
 
     // 2. EtherNet/IP Setup
     cip_identity_attr_t id{};
@@ -95,16 +99,16 @@ void test_bridge_canopen_and_eip_to_mqtt() {
     router.map_eip_to_mqtt(100, 0, "sensors/flow", BRIDGE_TYPE_FLOAT);
 
     size_t count = router.sync_all();
-    assert(count == 2);
+    CHECK(count == 2);
 
     // Verify Modbus reg 5 has motor speed 1500
-    assert(modbus_regs[5] == 1500);
+    CHECK(modbus_regs[5] == 1500);
 
-    std::cout << "[Test] CANopen & EIP -> MQTT bridge passed!" << std::endl;
+    std::cout << "# [Test] CANopen & EIP -> MQTT bridge passed!" << std::endl;
 }
 
-void test_bridge_periodic_and_cov() {
-    std::cout << "[Test] Running Periodic and COV synchronization tests..." << std::endl;
+TEST_CASE(test_bridge_periodic_and_cov) {
+    std::cout << "# [Test] Running Periodic and COV synchronization tests..." << std::endl;
 
     float raw_var = 10.0f;
     uint16_t modbus_regs[5] = {0};
@@ -139,35 +143,40 @@ void test_bridge_periodic_and_cov() {
 
     // 1st tick: COV detects initial change, Periodic at 50ms does not fire
     size_t n = router.tick(50);
-    assert(n == 1); // Only COV synced
-    assert(modbus_regs[0] == 10);
-    assert(modbus_regs[1] == 0); // Periodic hasn't fired yet
+    CHECK(n == 1); // Only COV synced
+    CHECK(modbus_regs[0] == 10);
+    CHECK(modbus_regs[1] == 0); // Periodic hasn't fired yet
 
     // 2nd tick: 50ms more (total 100ms) -> Periodic fires!
     n = router.tick(50);
-    assert(n == 1); // Only Periodic synced (COV didn't change)
-    assert(modbus_regs[1] == 20); // 10 * 2
+    CHECK(n == 1);               // Only Periodic synced (COV didn't change)
+    CHECK(modbus_regs[1] == 20); // 10 * 2
 
     // Now change raw_var
     raw_var = 42.0f;
     n = router.tick(10);
-    assert(n == 1); // COV fired
-    assert(modbus_regs[0] == 42);
+    CHECK(n == 1); // COV fired
+    CHECK(modbus_regs[0] == 42);
 
-    std::cout << "[Test] Periodic and COV synchronization passed!" << std::endl;
+    std::cout << "# [Test] Periodic and COV synchronization passed!" << std::endl;
 }
 
-int main() {
-    std::cout << "========================================" << std::endl;
-    std::cout << " Running embed_bridge test suite..." << std::endl;
-    std::cout << "========================================" << std::endl;
-
-    test_bridge_modbus_to_opcua();
-    test_bridge_canopen_and_eip_to_mqtt();
-    test_bridge_periodic_and_cov();
-
-    std::cout << "========================================" << std::endl;
-    std::cout << " All embed_bridge tests PASSED!" << std::endl;
-    std::cout << "========================================" << std::endl;
-    return 0;
+TEST_CASE(modbus_tcp_register_bank) {
+    bridge_router_t router{};
+    bridge_router_init(&router);
+    uint16_t regs[2] = {10, 20};
+    bridge_router_bind_modbus(&router, regs, 2);
+    modbus_slave_t slave{};
+    REQUIRE(bridge_router_init_modbus_slave(&router, &slave, 1));
+    uint8_t req[] = {0, 42, 0, 0, 0, 6, 1, 6, 0, 1, 0, 99}, resp[260];
+    CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 12u);
+    CHECK_EQ(regs[1], 99u);
+    req[7] = 3;
+    req[11] = 1;
+    CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 11u);
+    CHECK_EQ(resp[10], 99u);
+    req[9] = 2;
+    CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 9u);
+    CHECK_EQ(resp[8], MODBUS_EX_ILLEGAL_DATA_ADDRESS);
 }
+EMBED_TEST_MAIN()
