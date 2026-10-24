@@ -2,8 +2,9 @@
 //
 // 等加速度運動の公式 (s = ½at², v = at, s = v²/2a など) から手計算した値を期待値にしている。
 // 台形・三角形・非対称加減速・逆方向・開始位置オフセットについて、位相の境界と途中の
-// 位置/速度/加速度を直接確認する。S字プロファイルは、実装に依らず満たすべき性質
-// (端点条件、対称性、単調性、連続性)を確認する。
+// 位置/速度/加速度を直接確認する。S字プロファイルは、ジャーク制限付きの7区間
+// (ジャーク +j / 0 / -j の加速ステージ、等速、その時間反転の減速ステージ)の解析解と、
+// 最高速度・加速度・減速度・ジャークの上限を守ることを確認する。
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -308,6 +309,182 @@ TEST_CASE(scurve_is_smoother_than_trapezoid_at_the_start) {
         return p.total_time;
     };
     CHECK(time_to_half(s) > time_to_half(t));
+}
+
+// =============================================================================
+// S字 (ジャーク制限付き 7 区間): 解析解
+//   加速ステージ: ジャーク +j で a_pk まで (tj = a/j) → 等加速度 → ジャーク -j で 0 まで
+//   Vmax=50, Amax=Dmax=100, Jmax=500: tj = 0.2 s、速度 50 に達するのに 0.7 s、距離 17.5
+// =============================================================================
+TEST_CASE(scurve_seven_segment_profile_matches_closed_form_values) {
+    motion_profile_t p = plan(MOTION_PROFILE_SCURVE, {50, 100, 100, 500}, 10, 60);
+    CHECK_NEAR(p.v_peak, 50.0, kTol);
+    CHECK_NEAR(p.t_acc, 0.7, kTol);   // v/a + a/j = 0.5 + 0.2
+    CHECK_NEAR(p.t_dec, 0.7, kTol);
+    CHECK_NEAR(p.t_const, 0.3, kTol); // (50 - 2·17.5) / 50
+    CHECK_NEAR(p.total_time, 1.7, kTol);
+
+    struct Row {
+        float t, pos, vel, acc, jerk;
+    };
+    const Row rows[] = {
+        // 加速ステージ
+        {0.10f, 10.0f + 0.083333f, 2.5f, 50.0f, 500.0f},   // 区間1: s = j t³/6, v = j t²/2, a = j t
+        {0.19f, 10.0f + 0.57158f, 9.025f, 95.0f, 500.0f},  // a_pk に達する直前
+        {0.35f, 10.0f + 0.666667f + 10.0f * 0.15f + 0.5f * 100.0f * 0.0225f, 25.0f, 100.0f, 0.0f}, // 区間2: 等加速度
+        {0.60f, 10.0f + 12.583333f, 47.5f, 50.0f, -500.0f}, // 区間3: a = 100 - j·0.1
+        // 等速
+        {0.85f, 10.0f + 25.0f, 50.0f, 0.0f, 0.0f},
+        {1.00f, 10.0f + 32.5f, 50.0f, 0.0f, 0.0f},
+        // 減速ステージ(加速ステージの時間反転: ジャーク -j → 0 → +j)
+        {1.15f, 10.0f + 39.71875f, 44.375f, -75.0f, -500.0f},
+        {1.35f, 10.0f + 46.7083333f, 25.0f, -100.0f, 0.0f}, // 等減速度 (u = 0.35): 32.5 + 9.3333 + 4.875
+        {1.60f, 10.0f + 49.9166667f, 2.5f, -50.0f, 500.0f}, // 最後のジャーク区間 (u = 0.6)
+    };
+    for (const Row &r : rows) {
+        motion_state_t s = at(p, r.t);
+        if (!(std::fabs(s.position - r.pos) <= 2e-3 && std::fabs(s.velocity - r.vel) <= 2e-3 &&
+              std::fabs(s.acceleration - r.acc) <= 2e-2 && std::fabs(s.jerk - r.jerk) <= 1e-3)) {
+            std::printf("# t=%.3f expected pos=%.5f vel=%.4f acc=%.3f jerk=%.1f, actual pos=%.5f vel=%.4f acc=%.3f "
+                        "jerk=%.1f\n",
+                        r.t, r.pos, r.vel, r.acc, r.jerk, s.position, s.velocity, s.acceleration, s.jerk);
+            CHECK(false);
+        } else {
+            CHECK(true);
+        }
+    }
+    CHECK_NEAR(at(p, 0.7f).position, 10.0 + 17.5, kTol); // 加速ステージの距離
+    CHECK_NEAR(at(p, 1.7f).position, 60.0, kTol);
+}
+
+TEST_CASE(scurve_without_reaching_the_acceleration_limit) {
+    // 速度変化が小さく、加速度上限に届かない場合: a_pk = √(dv·j)、ステージ時間 2·√(dv/j)
+    // v_peak = 10 → tj = √(10/500) = 0.141421 s、ステージ距離 = 10 x 0.282843 / 2 = 1.41421
+    const double d = 2.0 * 10.0 * std::sqrt(10.0 / 500.0); // 2.828427
+    motion_profile_t p = plan(MOTION_PROFILE_SCURVE, {50, 100, 100, 500}, 0, (float)d);
+    CHECK_NEAR(p.v_peak, 10.0, 5e-3);
+    CHECK_NEAR(p.t_const, 0.0, kTol);
+    CHECK_NEAR(p.t_acc, 2.0 * std::sqrt(10.0 / 500.0), 1e-3);
+    CHECK_NEAR(p.total_time, 4.0 * std::sqrt(10.0 / 500.0), 2e-3);
+    motion_state_t s = at(p, 0.14f); // 最初のジャーク区間
+    CHECK_NEAR(s.acceleration, 70.0, 5e-2);
+    CHECK_NEAR(s.velocity, 0.5 * 500.0 * 0.14 * 0.14, 1e-3);
+    CHECK_NEAR(s.position, 500.0 * 0.14 * 0.14 * 0.14 / 6.0, 1e-3);
+    CHECK_NEAR(s.jerk, 500.0, 1e-3);
+    // 加速度のピークは √(dv·j) = √5000 ≈ 70.71 で、上限 100 には届かない
+    float peak_a = 0;
+    for (int i = 1; i < 2000; ++i)
+        peak_a = std::fmax(peak_a, std::fabs(at(p, p.total_time * i / 2000).acceleration));
+    CHECK_NEAR(peak_a, std::sqrt(5000.0), 0.1);
+    CHECK_NEAR(at(p, p.total_time / 2).position, d / 2, 2e-3);
+}
+
+TEST_CASE(scurve_asymmetric_deceleration_limit) {
+    // Amax=100, Dmax=50, Jmax=500, Vmax=50, 距離 50
+    //   加速ステージ 0.7 s (17.5)、減速ステージ 50/50 + 50/500 = 1.1 s (27.5)、等速 5/50 = 0.1 s、総時間 1.9 s
+    motion_profile_t p = plan(MOTION_PROFILE_SCURVE, {50, 100, 50, 500}, 0, 50);
+    CHECK_NEAR(p.t_acc, 0.7, kTol);
+    CHECK_NEAR(p.t_const, 0.1, kTol);
+    CHECK_NEAR(p.t_dec, 1.1, kTol);
+    CHECK_NEAR(p.total_time, 1.9, kTol);
+    // 減速ステージ中央 (u = 0.55): 等減速度 -50、速度 25、位置 17.5 + 5 + 21.22917
+    motion_state_t s = at(p, 1.35f);
+    CHECK_NEAR(s.acceleration, -50.0, 2e-2);
+    CHECK_NEAR(s.velocity, 25.0, 2e-3);
+    CHECK_NEAR(s.position, 43.72917, 2e-3);
+    CHECK_NEAR(s.jerk, 0.0, 1e-3);
+    // 減速度は 50 を超えず、加速度は 100 まで使う
+    float max_acc = 0, max_dec = 0;
+    for (int i = 1; i < 4000; ++i) {
+        motion_state_t x = at(p, p.total_time * i / 4000);
+        max_acc = std::fmax(max_acc, x.acceleration);
+        max_dec = std::fmax(max_dec, -x.acceleration);
+    }
+    CHECK_NEAR(max_acc, 100.0, 0.5);
+    CHECK_NEAR(max_dec, 50.0, 0.5);
+}
+
+TEST_CASE(scurve_never_exceeds_velocity_acceleration_deceleration_or_jerk_limits) {
+    struct Case {
+        motion_constraints_t c;
+        float from, to;
+    };
+    const Case cases[] = {
+        {{50, 100, 100, 500}, 10, 60},  // 以前は速度 55.1 / ジャーク 613 に達していた
+        {{100, 50, 50, 200}, 0, 200},   // 以前は加速度 57.0
+        {{50, 100, 100, 500}, 0, 5},    // 短距離 (最高速度・加速度上限に届かない)
+        {{50, 100, 100, 0}, 0, 100},    // ジャーク未指定 (既定 5 x Amax) は以前は速度 69.4
+        {{50, 100, 100, 500}, 60, 10},  // 逆方向
+        {{20, 30, 60, 90}, -5, 400},    // 長距離・減速度の方が大きい
+        {{200, 40, 10, 100}, 0, 80},    // 減速度が小さい (減速に時間がかかる)
+        {{1, 1, 1, 1}, 0, 0.5f},        // 小さな値
+        {{300, 1000, 1000, 100000}, 0, 3000},
+    };
+    for (const Case &k : cases) {
+        motion_profile_t p = plan(MOTION_PROFILE_SCURVE, k.c, k.from, k.to);
+        REQUIRE(p.total_time > 0.0f);
+        const float dir = k.to > k.from ? 1.0f : -1.0f;
+        const float dist = std::fabs(k.to - k.from);
+        const float jmax = k.c.max_jerk > 0 ? k.c.max_jerk : k.c.max_acceleration * 5.0f;
+        const int n = 20000;
+        const float dt = p.total_time / n;
+        float prev_a = 0, prev_pos = k.from;
+        double int_v = 0;
+        float worst_back = 0;
+        for (int i = 1; i < n; ++i) {
+            motion_state_t s = at(p, dt * i);
+            CHECK(std::fabs(s.velocity) <= k.c.max_velocity * 1.0005f);
+            CHECK(s.acceleration * dir <= k.c.max_acceleration * 1.0005f);
+            CHECK(-s.acceleration * dir <= k.c.max_deceleration * 1.0005f);
+            CHECK(std::fabs(s.jerk) <= jmax * 1.0005f); // 報告されるジャーク
+            if (i > 1)                                  // 加速度の変化率 (数値微分) も上限以内
+                CHECK(std::fabs(s.acceleration - prev_a) / dt <= jmax * 1.03f);
+            worst_back = std::fmax(worst_back, -(s.position - prev_pos) * dir);
+            int_v += (double)s.velocity * dt;
+            prev_a = s.acceleration;
+            prev_pos = s.position;
+        }
+        CHECK(worst_back < 1e-3f * std::fmax(1.0f, dist));
+        CHECK_NEAR(int_v * dir, dist, 2e-3 * std::fmax(1.0f, dist));
+        CHECK_NEAR(at(p, p.total_time).position, k.to, kTol);
+    }
+}
+
+TEST_CASE(scurve_converges_to_the_trapezoid_when_the_jerk_limit_is_very_large) {
+    // ジャーク上限が十分大きければ S字は台形に一致する。有限なら必ず台形より遅い
+    for (float to : {100.0f, 30.0f, 8.0f}) {
+        motion_profile_t trap = plan(MOTION_PROFILE_TRAPEZOIDAL, {100, 200, 200, 0}, 0, to);
+        motion_profile_t huge = plan(MOTION_PROFILE_SCURVE, {100, 200, 200, 1e7f}, 0, to);
+        motion_profile_t mild = plan(MOTION_PROFILE_SCURVE, {100, 200, 200, 2000}, 0, to);
+        CHECK_NEAR(huge.total_time, trap.total_time, 2e-3);
+        CHECK_NEAR(huge.v_peak, trap.v_peak, 0.1);
+        CHECK(mild.total_time > trap.total_time);
+        CHECK(mild.total_time < trap.total_time + 0.25f); // 差はジャーク時間 (a/j = 0.1 s) の程度
+    }
+}
+
+TEST_CASE(scurve_default_jerk_is_five_times_the_acceleration_limit) {
+    motion_profile_t p = plan(MOTION_PROFILE_SCURVE, {50, 100, 100, 0}, 0, 100);
+    CHECK_NEAR(p.jerk_limit, 500.0, kTol);
+    // ジャーク 500 の明示指定と同じ軌道になる
+    motion_profile_t q = plan(MOTION_PROFILE_SCURVE, {50, 100, 100, 500}, 0, 100);
+    CHECK_NEAR(p.total_time, q.total_time, 1e-4);
+    CHECK_NEAR(at(p, 0.9f).position, at(q, 0.9f).position, 1e-3);
+    CHECK_NEAR(q.jerk_limit, 500.0, kTol); // 明示した上限はそのまま使われる
+}
+
+TEST_CASE(scurve_reports_jerk_with_the_motion_direction) {
+    motion_profile_t fwd = plan(MOTION_PROFILE_SCURVE, {50, 100, 100, 500}, 0, 100);
+    motion_profile_t rev = plan(MOTION_PROFILE_SCURVE, {50, 100, 100, 500}, 100, 0);
+    // 加速の最初のジャーク区間 (+j) と、減速の最初のジャーク区間 (-j): 逆方向では符号が反転する
+    CHECK_NEAR(at(fwd, 0.1f).jerk, 500.0, 1e-3);
+    CHECK_NEAR(at(rev, 0.1f).jerk, -500.0, 1e-3);
+    const float t_dec_start = fwd.t_acc + fwd.t_const;
+    CHECK_NEAR(at(fwd, t_dec_start + 0.1f).jerk, -500.0, 1e-3);
+    CHECK_NEAR(at(rev, t_dec_start + 0.1f).jerk, 500.0, 1e-3);
+    // 等速区間・停止後はジャーク 0
+    CHECK_NEAR(at(fwd, fwd.t_acc + fwd.t_const / 2).jerk, 0.0, 1e-3);
+    CHECK_NEAR(at(fwd, fwd.total_time + 1.0f).jerk, 0.0, 1e-3);
 }
 
 // =============================================================================

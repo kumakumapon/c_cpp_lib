@@ -13,10 +13,11 @@ extern "C" {
  * 
  * @param prof プロファイル構造体
  * @param type プロファイル種別 (TRAPEZOIDAL / SCURVE)
- * @param constraints 拘束条件 (Vmax, Amax, Dmax, Jmax)
+ * @param constraints 拘束条件 (Vmax, Amax, Dmax, Jmax)。S字は 4 つ全ての上限を守る。
+ *                    Jmax <= 0 のとき S字は 5 x Amax を使う (台形は Jmax を使わない)
  * @param start_pos 開始位置
  * @param target_pos 目標位置
- * @param start_vel 開始速度 (通常 0.0)
+ * @param start_vel 開始速度 (現在は 0.0 のみ対応。0 以外を渡しても計画には反映されません)
  * @return true 計画成功
  */
 bool motion_profile_plan(motion_profile_t *prof,
