@@ -136,11 +136,14 @@ modbus_status_t modbus_master_parse_read_registers_resp(const uint8_t *resp_pdu,
 }
 
 modbus_status_t modbus_master_parse_write_resp(const uint8_t *resp_pdu, size_t resp_len, uint8_t expected_fc, uint16_t expected_addr) {
-    if (!resp_pdu || resp_len < 5) return MODBUS_ERR_INVALID_PARAM;
+    if (!resp_pdu || resp_len < 2) return MODBUS_ERR_INVALID_PARAM;
 
+    /* 例外応答は 2 バイト (FC|0x80, 例外コード) なので、長さ検査より先に判定する */
     if (resp_pdu[0] & 0x80) {
         return MODBUS_ERR_EXCEPTION_RECEIVED;
     }
+
+    if (resp_len < 5) return MODBUS_ERR_INVALID_PARAM;
 
     if (resp_pdu[0] != expected_fc) {
         return MODBUS_ERR_FUNCTION_MISMATCH;
