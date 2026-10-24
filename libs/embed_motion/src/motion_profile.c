@@ -4,6 +4,72 @@
 
 #define EPSILON 0.00001f
 
+/* ---------------------------------------------------------
+ * ジャーク制限付き S 字プロファイルの部品
+ *
+ * 速度 0 から dv まで増やす「加速ステージ」を、加速度上限 a・ジャーク上限 j で実現する。
+ *   区間1: ジャーク +j で加速度が a_pk まで上昇 (時間 tj)
+ *   区間2: 加速度 a_pk 一定 (時間 ta、a_pk に届かない場合は 0)
+ *   区間3: ジャーク -j で加速度が 0 まで低下 (時間 tj)
+ * 減速ステージは、加速ステージを時間反転したものである。
+ * --------------------------------------------------------- */
+typedef struct {
+    float tj;  /* ジャーク区間の時間 */
+    float ta;  /* 等加速度区間の時間 */
+    float T;   /* ステージ時間 */
+    float d;   /* ステージ中の移動距離 */
+} scurve_stage_t;
+
+static scurve_stage_t scurve_stage(float dv, float a, float j) {
+    scurve_stage_t st;
+    if (dv >= (a * a) / j) {
+        /* 加速度上限 a に到達する */
+        st.tj = a / j;
+        st.ta = dv / a - a / j;
+    } else {
+        /* 到達しない: 加速度のピークは √(dv·j) */
+        st.tj = sqrtf(dv / j);
+        st.ta = 0.0f;
+    }
+    st.T = 2.0f * st.tj + st.ta;
+    st.d = 0.5f * dv * st.T; /* 速度は対称に 0 → dv へ変化するので、平均速度は dv/2 */
+    return st;
+}
+
+/* 加速ステージの時刻 tau (0..T) における 移動距離 / 速度 / 加速度 / ジャーク */
+static void scurve_stage_eval(const scurve_stage_t *st, float j, float tau,
+                              float *s, float *v, float *a, float *jk) {
+    const float tj = st->tj;
+    const float ta = st->ta;
+    const float a_pk = j * tj;
+    const float v1 = 0.5f * j * tj * tj;
+    const float s1 = j * tj * tj * tj / 6.0f;
+
+    if (tau <= 0.0f) {
+        *s = 0.0f; *v = 0.0f; *a = 0.0f; *jk = j;
+    } else if (tau < tj) {
+        *jk = j;
+        *a = j * tau;
+        *v = 0.5f * j * tau * tau;
+        *s = j * tau * tau * tau / 6.0f;
+    } else if (tau < tj + ta) {
+        const float t = tau - tj;
+        *jk = 0.0f;
+        *a = a_pk;
+        *v = v1 + a_pk * t;
+        *s = s1 + v1 * t + 0.5f * a_pk * t * t;
+    } else {
+        float t = tau - tj - ta;
+        if (t > tj) t = tj;
+        const float v2 = v1 + a_pk * ta;
+        const float s2 = s1 + v1 * ta + 0.5f * a_pk * ta * ta;
+        *jk = -j;
+        *a = a_pk - j * t;
+        *v = v2 + a_pk * t - 0.5f * j * t * t;
+        *s = s2 + v2 * t + 0.5f * a_pk * t * t - j * t * t * t / 6.0f;
+    }
+}
+
 bool motion_profile_plan(motion_profile_t *prof,
                          motion_profile_type_t type,
                          const motion_constraints_t *constraints,
@@ -56,32 +122,35 @@ bool motion_profile_plan(motion_profile_t *prof,
         }
         prof->total_time = prof->t_acc + prof->t_const + prof->t_dec;
     } else if (type == MOTION_PROFILE_SCURVE) {
-        /* S字加減速 (ジャーク連続)
-         * 簡略化された対称S字加減速: 加速時間 t_acc, 等速時間 t_const, 減速時間 t_dec
-         * 加速フェーズを2分割 (躍度一定 + 加速度一定)
-         */
-        float j_max = constraints->max_jerk > 0.0f ? constraints->max_jerk : (a_acc * 5.0f);
-        float t_j = a_acc / j_max;
-        float t_acc_min = 2.0f * t_j;
-        float v_trans = a_acc * t_acc_min;
+        /* ジャーク制限付き S 字 (加速ステージ + 等速 + 減速ステージ)。
+         * 最高速度・加速度・減速度・ジャークの上限を全て守る。 */
+        const float j_max = constraints->max_jerk > 0.0f ? constraints->max_jerk : (a_acc * 5.0f);
+        prof->jerk_limit = j_max;
 
-        if (v_max > v_trans) {
-            prof->t_acc = (v_max / a_acc) + t_j;
-            prof->t_dec = (v_max / a_dec) + t_j;
-            prof->v_peak = v_max;
-            float d_acc = 0.5f * v_max * prof->t_acc;
-            float d_dec = 0.5f * v_max * prof->t_dec;
-            if (prof->distance >= d_acc + d_dec) {
-                prof->t_const = (prof->distance - (d_acc + d_dec)) / v_max;
-            } else {
-                prof->t_const = 0.0f;
-            }
+        scurve_stage_t acc = scurve_stage(v_max, a_acc, j_max);
+        scurve_stage_t dec = scurve_stage(v_max, a_dec, j_max);
+        float v_peak = v_max;
+
+        if (prof->distance >= acc.d + dec.d) {
+            /* 最高速度に到達し、残りを等速で進む */
+            prof->t_const = (prof->distance - (acc.d + dec.d)) / v_max;
         } else {
-            prof->v_peak = sqrtf(prof->distance * a_acc);
-            prof->t_acc = (prof->v_peak / a_acc) + t_j;
-            prof->t_dec = (prof->v_peak / a_dec) + t_j;
+            /* 最高速度に届かない: 加減速ステージの距離の合計が移動距離に等しくなる速度を求める
+             * (合計距離は速度に対して単調増加なので二分法で解く) */
+            float lo = 0.0f, hi = v_max;
+            for (int i = 0; i < 60; ++i) {
+                const float mid = 0.5f * (lo + hi);
+                const float sum = scurve_stage(mid, a_acc, j_max).d + scurve_stage(mid, a_dec, j_max).d;
+                if (sum < prof->distance) lo = mid; else hi = mid;
+            }
+            v_peak = 0.5f * (lo + hi);
+            acc = scurve_stage(v_peak, a_acc, j_max);
+            dec = scurve_stage(v_peak, a_dec, j_max);
             prof->t_const = 0.0f;
         }
+        prof->v_peak = v_peak;
+        prof->t_acc = acc.T;
+        prof->t_dec = dec.T;
         prof->total_time = prof->t_acc + prof->t_const + prof->t_dec;
     }
 
@@ -117,6 +186,7 @@ void motion_profile_evaluate(const motion_profile_t *prof, float t, motion_state
     float s = 0.0f; // 相対移動距離
     float v = 0.0f; // 相対速度
     float a = 0.0f; // 相対加速度
+    float jk = 0.0f; // 相対ジャーク
 
     float t1 = prof->t_acc;
     float t2 = prof->t_acc + prof->t_const;
@@ -148,25 +218,36 @@ void motion_profile_evaluate(const motion_profile_t *prof, float t, motion_state
             s = s_acc + s_const + (v_peak * dt_dec - 0.5f * a_dec * dt_dec * dt_dec);
         }
     } else {
-        /* S字 (正弦波加減速近似による滑らかなジャーク連続プロファイル) */
-        float tau = t / prof->total_time;
-        // 5次多項式 (Minimum Jerk Trajectory): s(tau) = 10*tau^3 - 15*tau^4 + 6*tau^5
-        float tau3 = tau * tau * tau;
-        float tau4 = tau3 * tau;
-        float tau5 = tau4 * tau;
-        float poly_s = 10.0f * tau3 - 15.0f * tau4 + 6.0f * tau5;
-        float poly_v = (30.0f * tau * tau - 60.0f * tau3 + 30.0f * tau4) / prof->total_time;
-        float poly_a = (60.0f * tau - 180.0f * tau * tau + 120.0f * tau3) / (prof->total_time * prof->total_time);
-
-        s = prof->distance * poly_s;
-        v = prof->distance * poly_v;
-        a = prof->distance * poly_a;
+        /* ジャーク制限付き S 字 */
+        const float jl = prof->jerk_limit;
+        if (t <= t1) {
+            /* 加速ステージ */
+            const scurve_stage_t acc = scurve_stage(v_peak, a_acc, jl);
+            scurve_stage_eval(&acc, jl, t, &s, &v, &a, &jk);
+        } else if (t <= t2) {
+            /* 等速 */
+            const scurve_stage_t acc = scurve_stage(v_peak, a_acc, jl);
+            s = acc.d + v_peak * (t - t1);
+            v = v_peak;
+        } else {
+            /* 減速ステージ: 加速ステージを時間反転したもの */
+            const scurve_stage_t acc = scurve_stage(v_peak, a_acc, jl);
+            const scurve_stage_t dec = scurve_stage(v_peak, a_dec, jl);
+            const float u = t - t2;
+            float rs = 0.0f, rv = 0.0f, ra = 0.0f, rj = 0.0f;
+            scurve_stage_eval(&dec, jl, dec.T - u, &rs, &rv, &ra, &rj);
+            s = acc.d + v_peak * prof->t_const + dec.d - rs;
+            v = rv;
+            a = -ra;
+            jk = rj;
+        }
+        if (s > prof->distance) s = prof->distance; /* 浮動小数点の丸めで目標を超えない */
     }
 
     state->position = prof->start_pos + (prof->direction * s);
     state->velocity = prof->direction * v;
     state->acceleration = prof->direction * a;
-    state->jerk = 0.0f;
+    state->jerk = prof->direction * jk;
 }
 
 const motion_state_t* motion_profile_step(motion_profile_t *prof, float dt) {

@@ -60,6 +60,7 @@ typedef struct {
     float t_dec;            /**< 減速フェーズ時間 [s] */
     float total_time;       /**< プロファイル総所要時間 [s] */
     float v_peak;           /**< 到達最高速度 [units/s] */
+    float jerk_limit;       /**< S字で使うジャーク上限 [units/s^3] (max_jerk 未指定時は 5 x Amax) */
     float direction;        /**< 移動方向 (+1.0 または -1.0) */
     float distance;         /**< 移動距離 (絶対値) */
 
