@@ -274,3 +274,41 @@ if (n != 0) {
 
 本リポジトリは [MIT License](LICENSE) の下で公開されています。
 Copyright (c) 2026 kumakumapon
+
+---
+
+## ⚠️ 免責事項 / Disclaimer
+
+### 日本語
+
+本ソフトウェアは「現状のまま」提供され、明示・黙示を問わず、商品性、特定目的への適合性、
+権利非侵害を含むいかなる保証も行いません。本ソフトウェアの使用または使用不能から生じた
+いかなる損害についても、作者および著作権者は責任を負いません（詳細は [LICENSE](LICENSE) を参照）。
+
+- 本ソフトウェアは機能安全規格（IEC 61508、ISO 26262 など）への適合を認証・保証するものではありません。
+  人命・財産に関わる用途や安全が重要なシステムで使用する場合は、利用者の責任で
+  十分な検証、評価、認証を行ってください。
+- 通信プロトコルの実装は、各規格への完全な準拠や他社製機器との相互接続性を保証しません。
+  また、認証、暗号化、アクセス制御は提供しません。
+- 本リポジトリは個人による保守のため、不具合の修正やサポートの提供を保証しません。
+- 記載されている製品名、規格名、商標は各権利者に帰属します。本リポジトリは
+  これらの権利者とは無関係であり、承認や提携を示すものではありません。
+
+### English
+
+This software is provided "as is", without warranty of any kind, express or implied, including
+but not limited to the warranties of merchantability, fitness for a particular purpose and
+noninfringement. In no event shall the authors or copyright holders be liable for any claim,
+damages or other liability arising from the use of, or inability to use, this software
+(see [LICENSE](LICENSE) for the full terms).
+
+- This software is not certified for, and makes no claim of compliance with, functional safety
+  standards such as IEC 61508 or ISO 26262. If you use it in safety-critical systems or in
+  applications where failure could cause injury, loss of life or property damage, you are solely
+  responsible for adequate verification, validation and certification.
+- The protocol implementations do not guarantee full conformance to the respective specifications
+  or interoperability with third-party devices. They provide no authentication, encryption or
+  access control.
+- This repository is maintained by an individual; bug fixes and support are not guaranteed.
+- Product names, standard names and trademarks mentioned belong to their respective owners.
+  This project is not affiliated with or endorsed by them.
