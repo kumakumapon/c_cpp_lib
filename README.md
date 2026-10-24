@@ -85,6 +85,52 @@ ctest --test-dir build -C Release --output-on-failure
 
 ---
 
+## 📖 使い方
+
+各ライブラリは名前空間付きターゲット `c_cpp_lib::<ライブラリ名>` として公開されます。
+利用側のプロジェクトへ取り込む方法は次の2通りです。
+
+### 1. FetchContent / add_subdirectory で取り込む
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(c_cpp_lib
+    GIT_REPOSITORY https://github.com/kumakumapon/c_cpp_lib.git
+    GIT_TAG        main)
+set(BUILD_APPS OFF CACHE BOOL "" FORCE)     # デモは不要
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)  # テストは不要
+FetchContent_MakeAvailable(c_cpp_lib)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE c_cpp_lib::uart_protocol c_cpp_lib::embed_fixed)
+```
+
+リポジトリをサブモジュール等で配置した場合は `add_subdirectory(c_cpp_lib)` でも同様に利用できます。
+
+### 2. インストールして find_package で取り込む
+
+[外部プロジェクトへのインストール](#外部プロジェクトへのインストール) の手順でインストールし、
+利用側で `find_package(c_cpp_lib CONFIG REQUIRED)` を呼びます。
+
+### コード例
+
+ヘッダは `<ライブラリ名/ヘッダ名>` の形式でインクルードします。
+
+```cpp
+#include <embed_fixed/embed_fixed.hpp>
+#include <uart_protocol/uart_crc.h>
+
+int main() {
+    const uint16_t crc = uart_crc16_ccitt(reinterpret_cast<const uint8_t *>("123456789"), 9, 0xffff);
+    return crc == 0x29b1 && embed_q15_mul(16384, 16384) == 8192 ? 0 : 1;
+}
+```
+
+各ライブラリの詳細な API は `libs/<ライブラリ名>/README.md` を、
+動作するサンプルは `apps/` 以下のデモを参照してください。
+
+---
+
 ## ➕ 新しいライブラリの追加方法
 
 `libs/` 配下に新しいディレクトリを作成するだけで、CMakeが自動的に検出します。
@@ -216,3 +262,10 @@ if (n != 0) {
 配列Variant、拡張NodeId、未対応DataValueフィールドは拒否します。
 この変更はメモリ安全性の修正であり、既存の簡略化されたOPC UAサービスを完全な仕様実装へ
 拡張するものではありません。既存の呼び出し元は再コンパイルが必要です。
+
+---
+
+## 📄 ライセンス
+
+本リポジトリは [MIT License](LICENSE) の下で公開されています。
+Copyright (c) 2026 kumakumapon
