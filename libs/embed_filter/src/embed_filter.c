@@ -51,6 +51,12 @@ void imu_filter_update(imu_filter_t *filter, float gx, float gy, float gz, float
     float dt = 1.0f / filter->sample_freq;
     float q0 = filter->q.q0, q1 = filter->q.q1, q2 = filter->q.q2, q3 = filter->q.q3;
 
+    // ジャイロによる角速度からクォータニオン微分を計算 (常に積分する)
+    float qDot1 = 0.5f * (-q1 * gx - q2 * gy - q3 * gz);
+    float qDot2 = 0.5f * ( q0 * gx + q2 * gz - q3 * gy);
+    float qDot3 = 0.5f * ( q0 * gy - q1 * gz + q3 * gx);
+    float qDot4 = 0.5f * ( q0 * gz + q1 * gy - q2 * gx);
+
     // 加速度ベクトルの正規化
     float norm_a = sqrtf(ax * ax + ay * ay + az * az);
     if (norm_a > EPSILON) {
@@ -78,36 +84,20 @@ void imu_filter_update(imu_filter_t *filter, float gx, float gy, float gz, float
         float s2 = 4.0f * q0q0 * q2 + _2q0 * ax + _4q2 * q3q3 - _2q3 * ay - _4q2 + _8q2 * q1q1 + _8q2 * q2q2 + _4q2 * az;
         float s3 = 4.0f * q1q1 * q3 - _2q1 * ax + 4.0f * q2q2 * q3 - _2q2 * ay;
 
+        // 勾配が 0 (重力方向と姿勢が一致) のときは補正しない。ジャイロの積分は常に適用される。
         float norm_s = sqrtf(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3);
         if (norm_s > EPSILON) {
-            s0 /= norm_s;
-            s1 /= norm_s;
-            s2 /= norm_s;
-            s3 /= norm_s;
-
-            // ジャイロによる角速度からクォータニオン微分を計算 & 勾配補正適用
-            float qDot1 = 0.5f * (-q1 * gx - q2 * gy - q3 * gz) - filter->beta * s0;
-            float qDot2 = 0.5f * ( q0 * gx + q2 * gz - q3 * gy) - filter->beta * s1;
-            float qDot3 = 0.5f * ( q0 * gy - q1 * gz + q3 * gx) - filter->beta * s2;
-            float qDot4 = 0.5f * ( q0 * gz + q1 * gy - q2 * gx) - filter->beta * s3;
-
-            q0 += qDot1 * dt;
-            q1 += qDot2 * dt;
-            q2 += qDot3 * dt;
-            q3 += qDot4 * dt;
+            qDot1 -= filter->beta * (s0 / norm_s);
+            qDot2 -= filter->beta * (s1 / norm_s);
+            qDot3 -= filter->beta * (s2 / norm_s);
+            qDot4 -= filter->beta * (s3 / norm_s);
         }
-    } else {
-        // ジャイロのみの積分
-        float qDot1 = 0.5f * (-q1 * gx - q2 * gy - q3 * gz);
-        float qDot2 = 0.5f * ( q0 * gx + q2 * gz - q3 * gy);
-        float qDot3 = 0.5f * ( q0 * gy - q1 * gz + q3 * gx);
-        float qDot4 = 0.5f * ( q0 * gz + q1 * gy - q2 * gx);
-
-        q0 += qDot1 * dt;
-        q1 += qDot2 * dt;
-        q2 += qDot3 * dt;
-        q3 += qDot4 * dt;
     }
+
+    q0 += qDot1 * dt;
+    q1 += qDot2 * dt;
+    q2 += qDot3 * dt;
+    q3 += qDot4 * dt;
 
     // クォータニオン正規化
     float norm_q = sqrtf(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3);
