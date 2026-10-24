@@ -129,7 +129,7 @@ ER twai_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn, TMO tmout) {
 
     uitron_task_wait(cur, TTW_FLG, flgid, tmout);
     uitron_reschedule();
-    return cur->wait_er;
+    return E_WBLK; /* 呼出元は中断できない: 待ち登録済み (結果は ref_tsk/コールバックで確認) */
 }
 
 ER ref_flg(ID flgid, T_RFLG *pk_rflg) {

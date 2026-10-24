@@ -97,15 +97,16 @@ bool modbus_master_req_write_multiple_registers(uint16_t start_addr, uint16_t co
  * --------------------------------------------------------- */
 modbus_status_t modbus_master_parse_read_coils_resp(const uint8_t *resp_pdu, size_t resp_len, uint8_t *dest_bytes, uint16_t expected_count) {
     if (!resp_pdu || resp_len < 2 || !dest_bytes) return MODBUS_ERR_INVALID_PARAM;
+    if (expected_count == 0 || expected_count > MODBUS_MAX_READ_COILS) return MODBUS_ERR_INVALID_PARAM;
 
     if (resp_pdu[0] & 0x80) {
         return MODBUS_ERR_EXCEPTION_RECEIVED;
     }
 
-    uint8_t expected_bytes = (uint8_t)((expected_count + 7) / 8);
-    uint8_t byte_count = resp_pdu[1];
+    size_t expected_bytes = ((size_t)expected_count + 7) / 8;
+    size_t byte_count = resp_pdu[1];
 
-    if (byte_count != expected_bytes || resp_len < (size_t)(2 + byte_count)) {
+    if (byte_count != expected_bytes || resp_len < 2 + byte_count) {
         return MODBUS_ERR_INVALID_RESPONSE;
     }
 
@@ -115,15 +116,16 @@ modbus_status_t modbus_master_parse_read_coils_resp(const uint8_t *resp_pdu, siz
 
 modbus_status_t modbus_master_parse_read_registers_resp(const uint8_t *resp_pdu, size_t resp_len, uint16_t *dest_regs, uint16_t expected_count) {
     if (!resp_pdu || resp_len < 2 || !dest_regs) return MODBUS_ERR_INVALID_PARAM;
+    if (expected_count == 0 || expected_count > MODBUS_MAX_READ_REGISTERS) return MODBUS_ERR_INVALID_PARAM;
 
     if (resp_pdu[0] & 0x80) {
         return MODBUS_ERR_EXCEPTION_RECEIVED;
     }
 
-    uint8_t expected_bytes = (uint8_t)(expected_count * 2);
-    uint8_t byte_count = resp_pdu[1];
+    size_t expected_bytes = (size_t)expected_count * 2;
+    size_t byte_count = resp_pdu[1];
 
-    if (byte_count != expected_bytes || resp_len < (size_t)(2 + byte_count)) {
+    if (byte_count != expected_bytes || resp_len < 2 + byte_count) {
         return MODBUS_ERR_INVALID_RESPONSE;
     }
 

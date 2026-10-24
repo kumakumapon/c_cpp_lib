@@ -105,7 +105,7 @@ ER tget_mpf(ID mpfid, VP *p_blk, TMO tmout) {
     cur->p_mpf_blk = p_blk;
     uitron_task_wait(cur, TTW_MPF, mpfid, tmout);
     uitron_reschedule();
-    return cur->wait_er;
+    return E_WBLK; /* 呼出元は中断できない: 待ち登録済み (結果は ref_tsk/コールバックで確認) */
 }
 
 ER rel_mpf(ID mpfid, VP blk) {

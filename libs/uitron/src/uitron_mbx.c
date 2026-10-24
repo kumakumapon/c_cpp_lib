@@ -123,7 +123,7 @@ ER trcv_mbx(ID mbxid, T_MSG **ppk_msg, TMO tmout) {
     cur->ppk_msg = ppk_msg;
     uitron_task_wait(cur, TTW_MBX, mbxid, tmout);
     uitron_reschedule();
-    return cur->wait_er;
+    return E_WBLK; /* 呼出元は中断できない: 待ち登録済み (結果は ref_tsk/コールバックで確認) */
 }
 
 ER ref_mbx(ID mbxid, T_RMBX *pk_rmbx) {

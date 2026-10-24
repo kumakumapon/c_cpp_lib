@@ -44,6 +44,8 @@
 | **システム時刻** | `set_tim`, `get_tim`, `isig_tim` |
 | **システム状態管理** | `loc_cpu`, `unl_cpu`, `dis_dsp`, `ena_dsp`, `sns_ctx`, `sns_loc`, `sns_dsp`, `sns_dpn` |
 
+> **ブロッキング系サービスコールの注意**: 本ライブラリはホスト/協調実行向けで、呼出元の実行を中断できません。`wai_sem`・`twai_*`・`slp_tsk`・`dly_tsk` など、条件が即時に成立しない待ち系は、タスクを待ち状態へ登録して **`E_WBLK`** を返します(成功 `E_OK` ではありません)。解除は `sig_sem`/`set_flg`/`wup_tsk`/`uitron_os_tick` 等で行われ、状態は `ref_tsk` で確認します。`ext_tsk`/`ter_tsk` は、起動要求がキューイングされていれば再起動します。
+
 ---
 
 ## 🔍 各機能の解説

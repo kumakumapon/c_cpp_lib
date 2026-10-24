@@ -174,4 +174,33 @@ TEST_CASE(test_cpp_slave_wrapper) {
     std::cout << "# [Test] C++ Slave Wrapper passed!" << std::endl;
 }
 
+
+// ---- 回帰テスト: master 応答デコードの境界 (レビュー指摘) ----
+TEST_CASE(regression_master_parse_rejects_truncated_counts) {
+    // expected_count=129 は uint8_t 切り詰めで期待バイト数 2 と誤判定されていた
+    std::vector<uint8_t> resp = {0x03, 0x02, 0x12, 0x34};
+    std::vector<uint16_t> dest(200, 0);
+    CHECK(modbus_master_parse_read_registers_resp(resp.data(), resp.size(), dest.data(), 129) ==
+          MODBUS_ERR_INVALID_PARAM);
+    CHECK(modbus_master_parse_read_registers_resp(resp.data(), resp.size(), dest.data(), 0) ==
+          MODBUS_ERR_INVALID_PARAM);
+    CHECK(modbus_master_parse_read_registers_resp(resp.data(), resp.size(), dest.data(), 1) ==
+          MODBUS_OK);
+    CHECK(dest[0] == 0x1234);
+
+    // 2048 coils -> 256 bytes は uint8_t で 0 に切り詰められていた
+    std::vector<uint8_t> coil_resp = {0x01, 0x00};
+    std::vector<uint8_t> coils(300, 0);
+    CHECK(modbus_master_parse_read_coils_resp(coil_resp.data(), coil_resp.size(), coils.data(), 2048) ==
+          MODBUS_ERR_INVALID_PARAM);
+
+    // byte_count が実データより長い (切り詰め応答)
+    std::vector<uint8_t> shortresp = {0x03, 0x04, 0x00, 0x01};
+    CHECK(modbus_master_parse_read_registers_resp(shortresp.data(), shortresp.size(), dest.data(), 2) ==
+          MODBUS_ERR_INVALID_RESPONSE);
+    std::vector<uint8_t> coil_ok = {0x01, 0x01, 0x05};
+    CHECK(modbus_master_parse_read_coils_resp(coil_ok.data(), coil_ok.size(), coils.data(), 8) == MODBUS_OK);
+    CHECK(coils[0] == 0x05);
+}
+
 EMBED_TEST_MAIN()

@@ -228,4 +228,100 @@ TEST_CASE(test_memory_pool) {
     std::cout << "# [Test] Memory pool passed!" << std::endl;
 }
 
+
+// ---- 回帰テスト: レビュー指摘 (待ち系 / 起動要求キュー / 二重待ち) ----
+static void make_running_task(ID id, PRI pri) {
+    T_CTSK c{};
+    c.tskatr = TA_HLNG | TA_ACT;
+    c.itskpri = pri;
+    c.task = task1_entry;
+    c.stksz = 64;
+    CHECK(cre_tsk(id, &c) == E_OK);
+}
+
+TEST_CASE(regression_blocking_call_does_not_report_success) {
+    uitron_os_init();
+    make_running_task(1, 3);
+    T_CSEM cs{};
+    cs.sematr = TA_TFIFO;
+    cs.isemcnt = 0;
+    cs.maxsem = 1;
+    REQUIRE(cre_sem(1, &cs) == E_OK);
+
+    // 空セマフォの wai_sem は獲得成功(E_OK)を返してはならない
+    CHECK(wai_sem(1) == E_WBLK);
+    T_RTSK rt{};
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat == TTS_WAI);
+    CHECK(rt.tskwait == TTW_SEM);
+
+    // sig_sem は待ちタスクを解除し、カウントは増えない
+    CHECK(sig_sem(1) == E_OK);
+    T_RSEM rs{};
+    CHECK(ref_sem(1, &rs) == E_OK);
+    CHECK(rs.semcnt == 0);
+    CHECK(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat != TTS_WAI);
+
+    uitron_os_init();
+    make_running_task(1, 3);
+    CHECK(slp_tsk() == E_WBLK);
+    uitron_os_init();
+    make_running_task(1, 3);
+    CHECK(dly_tsk(100) == E_WBLK);
+    CHECK(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskwait == TTW_DLY);
+    uitron_os_tick(99);
+    CHECK(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat == TTS_WAI);
+    uitron_os_tick(1);
+    CHECK(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat != TTS_WAI);
+}
+
+TEST_CASE(regression_ext_tsk_restarts_queued_activation) {
+    uitron_os_init();
+    make_running_task(1, 3);
+    CHECK(act_tsk(1) == E_OK);
+    CHECK(act_tsk(1) == E_OK);
+    T_RTSK rt{};
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.actcnt == 2);
+    ext_tsk();
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.actcnt == 1);
+    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
+    ext_tsk();
+    ext_tsk();
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.actcnt == 0);
+    CHECK(rt.tskstat == TTS_DMT);
+
+    // ter_tsk も同様
+    uitron_os_init();
+    make_running_task(1, 3);
+    CHECK(act_tsk(1) == E_OK);
+    CHECK(ter_tsk(1) == E_OK);
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.actcnt == 0);
+    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
+}
+
+TEST_CASE(regression_wait_suspended_task_stays_suspended_after_timeout) {
+    uitron_os_init();
+    make_running_task(1, 3);
+    CHECK(tslp_tsk(10) == E_WBLK);
+    CHECK(sus_tsk(1) == E_OK);
+    T_RTSK rt{};
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat == TTS_WAS);
+    uitron_os_tick(20);
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat == TTS_SUS);
+    CHECK(rt.suscnt == 1);
+    CHECK(rsm_tsk(1) == E_OK);
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
+    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
+}
+
 EMBED_TEST_MAIN()
