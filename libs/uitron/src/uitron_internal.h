@@ -37,6 +37,7 @@ typedef struct tcb {
     VP      *p_mpf_blk;
 
     ER      wait_er;        /* 待ち解除時のエラーコード */
+    uint32_t wait_seq;      /* 待ちに入った順序 (TA_TFIFO の待ち行列順序) */
 } TCB;
 
 /* セマフォコントロールブロック (SCB) */
@@ -83,7 +84,9 @@ typedef struct {
     MCB     mcbs[UITRON_MAX_MBXID + 1];
     PCB     pcbs[UITRON_MAX_MPFID + 1];
 
-    ID      cur_tskid;      /* 実行中タスクID */
+    ID      cur_tskid;      /* スケジューラが選んだ実行状態のタスクID */
+    ID      exec_tskid;     /* エントリ関数を実行中のタスクID (ステップ実行中のみ有効) */
+    uint32_t wait_seq_counter; /* 待ち順序の採番 */
     BOOL    dsp_enabled;    /* ディスパッチ許可フラグ */
     BOOL    cpu_locked;     /* CPUロックフラグ */
     SYSTIM  systim;         /* システム時刻 (ms) */
@@ -97,6 +100,8 @@ void uitron_task_ready(TCB *tcb);
 void uitron_task_wait(TCB *tcb, STAT tskwait, ID wid, TMO tmout);
 void uitron_task_wakeup(TCB *tcb, ER er);
 void uitron_reschedule(void);
+ID uitron_caller_tskid(void);
+TCB *uitron_pick_waiter(STAT tskwait, ID wid, BOOL by_priority);
 
 #ifdef __cplusplus
 }

@@ -15,9 +15,17 @@ void uitron_os_shutdown(void) {
     uitron_os_init();
 }
 
+/* サービスコールを呼び出したタスクのID。
+ * エントリ関数の実行中は、そのタスク自身を指す。サービスコール内のディスパッチ
+ * (より高優先度のタスクを起こした場合など) でスケジューラの選択が変わっても、
+ * 呼出元は変わらない。タスク外 (割込みハンドラ相当) では実行状態のタスクを指す。 */
+ID uitron_caller_tskid(void) {
+    return (g_kcb.exec_tskid != TSK_SELF) ? g_kcb.exec_tskid : g_kcb.cur_tskid;
+}
+
 TCB *uitron_get_tcb(ID tskid) {
     if (tskid == TSK_SELF) {
-        tskid = g_kcb.cur_tskid;
+        tskid = uitron_caller_tskid();
     }
     if (tskid <= 0 || tskid > UITRON_MAX_TSKID) {
         return NULL;
@@ -41,6 +49,27 @@ void uitron_task_wait(TCB *tcb, STAT tskwait, ID wid, TMO tmout) {
     tcb->wid = wid;
     tcb->lefttmo = tmout;
     tcb->wait_er = E_OK;
+    tcb->wait_seq = ++g_kcb.wait_seq_counter;
+}
+
+/* 指定オブジェクトを待っているタスクのうち、次に解除すべきタスクを返す。
+ * by_priority (TA_TPRI) なら優先度順 (同一優先度は待ちに入った順)、
+ * そうでなければ (TA_TFIFO) 待ちに入った順。 */
+TCB *uitron_pick_waiter(STAT tskwait, ID wid, BOOL by_priority) {
+    TCB *best = NULL;
+    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
+        TCB *tcb = &g_kcb.tcbs[id];
+        if (!tcb->is_created || (tcb->tskstat != TTS_WAI && tcb->tskstat != TTS_WAS)) continue;
+        if (tcb->tskwait != tskwait || tcb->wid != wid) continue;
+        if (!best) {
+            best = tcb;
+        } else if (by_priority && tcb->tskpri != best->tskpri) {
+            if (tcb->tskpri < best->tskpri) best = tcb;
+        } else if (tcb->wait_seq < best->wait_seq) {
+            best = tcb;
+        }
+    }
+    return best;
 }
 
 void uitron_task_wakeup(TCB *tcb, ER er) {
@@ -120,7 +149,10 @@ void uitron_os_run_step(void) {
     if (g_kcb.cur_tskid != TSK_SELF) {
         TCB *tcb = uitron_get_tcb(g_kcb.cur_tskid);
         if (tcb && tcb->ctsk.task) {
+            const ID prev_exec = g_kcb.exec_tskid;
+            g_kcb.exec_tskid = tcb->tskid;
             tcb->ctsk.task();
+            g_kcb.exec_tskid = prev_exec;
         }
     }
 }

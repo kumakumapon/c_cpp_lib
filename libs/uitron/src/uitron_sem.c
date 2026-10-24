@@ -47,27 +47,7 @@ ER sig_sem(ID semid) {
     SCB *scb = &g_kcb.scbs[semid];
     if (!scb->is_created) return E_NOEXS;
 
-    /* 待ちタスクが存在するか探索 */
-    TCB *wait_tcb = NULL;
-    PRI highest_pri = UITRON_MAX_PRI + 1;
-
-    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
-        TCB *tcb = &g_kcb.tcbs[id];
-        if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {
-            if (tcb->tskwait == TTW_SEM && tcb->wid == semid) {
-                if (scb->csem.sematr & TA_TPRI) {
-                    if (tcb->tskpri < highest_pri) {
-                        highest_pri = tcb->tskpri;
-                        wait_tcb = tcb;
-                    }
-                } else {
-                    /* TA_TFIFO */
-                    wait_tcb = tcb;
-                    break;
-                }
-            }
-        }
-    }
+    TCB *wait_tcb = uitron_pick_waiter(TTW_SEM, semid, (scb->csem.sematr & TA_TPRI) != 0);
 
     if (wait_tcb) {
         uitron_task_wakeup(wait_tcb, E_OK);
@@ -109,7 +89,7 @@ ER twai_sem(ID semid, TMO tmout) {
         return E_TMOUT;
     }
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
 
     uitron_task_wait(cur, TTW_SEM, semid, tmout);

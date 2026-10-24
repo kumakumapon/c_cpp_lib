@@ -46,26 +46,7 @@ ER snd_mbx(ID mbxid, T_MSG *pk_msg) {
 
     pk_msg->next = NULL;
 
-    /* 待ちタスクが存在するかチェック */
-    TCB *wait_tcb = NULL;
-    PRI highest_pri = UITRON_MAX_PRI + 1;
-
-    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
-        TCB *tcb = &g_kcb.tcbs[id];
-        if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {
-            if (tcb->tskwait == TTW_MBX && tcb->wid == mbxid) {
-                if (mcb->cmbx.mbxatr & TA_TPRI) {
-                    if (tcb->tskpri < highest_pri) {
-                        highest_pri = tcb->tskpri;
-                        wait_tcb = tcb;
-                    }
-                } else {
-                    wait_tcb = tcb;
-                    break;
-                }
-            }
-        }
-    }
+    TCB *wait_tcb = uitron_pick_waiter(TTW_MBX, mbxid, (mcb->cmbx.mbxatr & TA_TPRI) != 0);
 
     if (wait_tcb) {
         if (wait_tcb->ppk_msg) {
@@ -117,7 +98,7 @@ ER trcv_mbx(ID mbxid, T_MSG **ppk_msg, TMO tmout) {
         return E_TMOUT;
     }
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
 
     cur->ppk_msg = ppk_msg;

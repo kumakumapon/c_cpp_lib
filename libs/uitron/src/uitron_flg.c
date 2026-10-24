@@ -120,7 +120,7 @@ ER twai_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn, TMO tmout) {
         return E_TMOUT;
     }
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
 
     cur->waiptn = waiptn;
