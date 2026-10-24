@@ -258,6 +258,21 @@ TEST_CASE(test_terminate_restarts_when_an_activation_is_queued) {
     CHECK(ter_tsk(1) == E_OBJ); // 休止中の終了要求は状態不正
 }
 
+TEST_CASE(test_wait_result_errors) {
+    uitron_os_init();
+    CHECK(uitron_wait_result(TSK_SELF) == E_CTX); // タスク外から自タスクは指定できない
+    CHECK(uitron_wait_result(3) == E_NOEXS);      // 未生成のタスク
+    CHECK(uitron_wait_result(UITRON_MAX_TSKID + 1) == E_NOEXS);
+
+    T_CTSK c{};
+    c.tskatr = TA_HLNG;
+    c.itskpri = 3;
+    c.task = never_run_entry;
+    c.stksz = 64;
+    REQUIRE(cre_tsk(3, &c) == E_OK);
+    CHECK(uitron_wait_result(3) == E_OK); // まだ一度も待っていない
+}
+
 TEST_CASE(test_api_tests_never_executed_a_task_body) { CHECK(g_entry_calls == 0); }
 
 EMBED_TEST_MAIN()

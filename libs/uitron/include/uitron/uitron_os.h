@@ -67,6 +67,27 @@ void uitron_os_schedule(void);
  */
 void uitron_os_run_step(void);
 
+/**
+ * @brief 待ちの結果を取得します (本ライブラリ独自の拡張)。
+ *
+ * ブロッキング系サービスコール (wai_sem, twai_flg, rcv_mbx, get_mpf, slp_tsk, dly_tsk など) は、
+ * 呼出元を中断できないため待ちを登録して E_WBLK を返します。待ちが解除された後の次のステップで、
+ * 本関数により μITRON 本来の戻り値に相当する結果を得られます。
+ *
+ * 結果は、そのタスクが最後に待ちへ入った回のものです。待ちを登録せずに戻ったサービスコール
+ * (即時成立・ポーリング失敗) の結果は含みません。E_WBLK が返った後に読んでください。
+ *
+ * @param tskid 対象タスク (TSK_SELF で呼出元)
+ * @retval E_OK     待ち条件が成立した (資源獲得・メッセージ受信・起床・dly_tsk の時間経過など)
+ * @retval E_TMOUT  タイムアウトした
+ * @retval E_RLWAI  rel_wai / irel_wai で強制解除された
+ * @retval E_DLT    待っていたオブジェクトが削除された
+ * @retval E_WBLK   まだ待ち中 (待ち状態・二重待ち状態)
+ * @retval E_NOEXS  タスクが存在しない
+ * @retval E_CTX    TSK_SELF をタスク外 (実行中のタスクがない状態) から指定した
+ */
+ER uitron_wait_result(ID tskid);
+
 #ifdef __cplusplus
 }
 #endif

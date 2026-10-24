@@ -339,7 +339,8 @@ void reset_state(uint32_t d1, uint32_t d2, uint32_t d3) {
 
 void coordinator() {
     if (g_coord_primed) { // 待ちが解除された(成立またはタイムアウト)
-        rec(kCoord, EV_WOKE, g_ptn == kSentinel ? -1 : static_cast<int>(g_ptn));
+        rec(kCoord, EV_WOKE, uitron_wait_result(TSK_SELF)); // 成立 E_OK / タイムアウト E_TMOUT
+        rec(kCoord, EV_LOG, g_ptn == kSentinel ? -1 : static_cast<int>(g_ptn));
         ext_tsk();
         return;
     }
@@ -396,7 +397,8 @@ TEST_CASE(flag_rendezvous_wakes_coordinator_when_the_last_worker_finishes) {
     CHECK_SEQ(ticks_of(kW2, EV_DONE), 35);
     CHECK_SEQ(ticks_of(kW3, EV_DONE), 50);
     CHECK_SEQ(ticks_of(kCoord, EV_WOKE), 50);
-    CHECK_SEQ(args_of(kCoord, EV_WOKE), 0x7);
+    CHECK_SEQ(args_of(kCoord, EV_WOKE), E_OK);
+    CHECK_SEQ(args_of(kCoord, EV_LOG), 0x7);
     CHECK_EQ(flag_now(), 0u);
     // 全員終了
     for (ID id : {kCoord, kW1, kW2, kW3})
@@ -412,7 +414,8 @@ TEST_CASE(flag_rendezvous_times_out_when_a_worker_is_late) {
 
     // 待ち開始(t=0)から100ms後にタイムアウトで起床する。成立時のパターンは書き込まれない
     CHECK_SEQ(ticks_of(kCoord, EV_WOKE), 100);
-    CHECK_SEQ(args_of(kCoord, EV_WOKE), -1);
+    CHECK_SEQ(args_of(kCoord, EV_WOKE), E_TMOUT);
+    CHECK_SEQ(args_of(kCoord, EV_LOG), -1);
     // タイムアウト時点で揃っているのは 0x3 で、遅れたワーカー(bit2)を特定できる。TWF_CLR は働かない
     CHECK_EQ(flag_now(), 0x3u);
 
@@ -823,6 +826,8 @@ T_MSG *g_msg;
 VP g_blk;
 
 void task() {
+    if (g_step > 0) // 前回の待ちの結果。5件はタイムアウト、最後の dly_tsk は時間経過なので E_OK
+        rec(kTask, EV_RUN, uitron_wait_result(TSK_SELF));
     ER er = E_OK;
     switch (g_step) {
     case 0: er = twai_sem(kSem, 5); break;
@@ -836,6 +841,7 @@ void task() {
     T_RTSK r{};
     ref_tsk(TSK_SELF, &r);
     rec(kTask, EV_BLOCKED, er);
+    rec(kTask, EV_SEND, uitron_wait_result(TSK_SELF)); // 待ち中は E_WBLK
     rec(kTask, EV_LOG, static_cast<int>(r.tskwait));
     rec(kTask, EV_WOKE, static_cast<int>(r.tskstat));
     ++g_step;
@@ -882,12 +888,81 @@ TEST_CASE(blocking_calls_register_a_wait_and_resume_after_the_timeout) {
     // 待ち要因は呼び出したサービスコールに対応し、状態は待ち(WAITING)である
     CHECK_SEQ(args_of(kTask, EV_LOG), TTW_SEM, TTW_FLG, TTW_MBX, TTW_MPF, TTW_SLP, TTW_DLY);
     CHECK_SEQ(args_of(kTask, EV_WOKE), TTS_WAI, TTS_WAI, TTS_WAI, TTS_WAI, TTS_WAI, TTS_WAI);
+    CHECK_SEQ(args_of(kTask, EV_SEND), E_WBLK, E_WBLK, E_WBLK, E_WBLK, E_WBLK, E_WBLK);
+    // 再開したステップでは、待ちの結果を戻り値として得られる(タイムアウト×5、時間経過 E_OK)
+    CHECK_SEQ(args_of(kTask, EV_RUN), E_TMOUT, E_TMOUT, E_TMOUT, E_TMOUT, E_TMOUT, E_OK);
     // タイムアウトした待ちは、成立したパターン・メッセージ・ブロックを書き込まない
     CHECK_EQ(g_ptn, 0u);
     CHECK(g_msg == nullptr);
     CHECK(g_blk == nullptr);
     // 最後の待ち(t=30)の後でタスクは終了する
     CHECK(ref(kTask).tskstat == TTS_DMT);
+}
+
+// =============================================================================
+// 10. 待ちの結果: 成立・タイムアウト・強制解除・オブジェクト削除を、再開したタスクが区別できる
+// =============================================================================
+namespace results {
+constexpr ID kSup = 1, kTimeout = 2, kDeleted = 3, kReleased = 4, kSignaled = 5;
+bool g_primed[8];
+
+template <ID N> void waiter() {
+    if (g_primed[N]) { // 待ちが解除された。その理由を取得する
+        rec(N, EV_WOKE, uitron_wait_result(TSK_SELF));
+        ext_tsk();
+        return;
+    }
+    g_primed[N] = true;
+    switch (N) {
+    case kTimeout: twai_sem(1, 20); break;  // 誰も返却しない → タイムアウト
+    case kDeleted: wai_sem(2); break;       // セマフォ削除
+    case kReleased: slp_tsk(); break;       // rel_wai で強制解除
+    case kSignaled: wai_sem(3); break;      // sig_sem で成立
+    }
+}
+} // namespace results
+
+TEST_CASE(wait_result_tells_why_a_blocked_task_resumed) {
+    using namespace results;
+    static const supervise::Step script[] = {
+        {10, [] { CHECK(rel_wai(kReleased) == E_OK); }},
+        {5, [] { CHECK(sig_sem(3) == E_OK); }},
+        {15, [] { CHECK(del_sem(2) == E_OK); }},
+    };
+    supervise::setup(script, 3);
+    for (bool &b : g_primed)
+        b = false;
+    for (ID sid : {1, 2, 3}) {
+        T_CSEM cs{};
+        cs.sematr = TA_TFIFO;
+        cs.isemcnt = 0;
+        cs.maxsem = 1;
+        REQUIRE(cre_sem(sid, &cs) == E_OK);
+    }
+    spawn(kSup, 1, supervise::run_script);
+    spawn(kTimeout, 3, waiter<kTimeout>);
+    spawn(kDeleted, 3, waiter<kDeleted>);
+    spawn(kReleased, 3, waiter<kReleased>);
+    spawn(kSignaled, 3, waiter<kSignaled>);
+    run_until_idle();
+
+    // 待っている間は E_WBLK
+    for (ID id : {kTimeout, kDeleted, kReleased, kSignaled})
+        CHECK_EQ(uitron_wait_result(id), E_WBLK);
+
+    run_for(40);
+    CHECK_SEQ(ticks_of(kReleased, EV_WOKE), 10);
+    CHECK_SEQ(args_of(kReleased, EV_WOKE), E_RLWAI);
+    CHECK_SEQ(ticks_of(kSignaled, EV_WOKE), 15);
+    CHECK_SEQ(args_of(kSignaled, EV_WOKE), E_OK);
+    CHECK_SEQ(ticks_of(kTimeout, EV_WOKE), 20);
+    CHECK_SEQ(args_of(kTimeout, EV_WOKE), E_TMOUT);
+    CHECK_SEQ(ticks_of(kDeleted, EV_WOKE), 30);
+    CHECK_SEQ(args_of(kDeleted, EV_WOKE), E_DLT);
+    // タスクが終了(休止)すると結果は消去され、再起動した実行に前回の結果を持ち越さない
+    CHECK(ref(kTimeout).tskstat == TTS_DMT);
+    CHECK_EQ(uitron_wait_result(kTimeout), E_OK);
+    CHECK_EQ(uitron_wait_result(kDeleted), E_OK);
 }
 
 EMBED_TEST_MAIN()
