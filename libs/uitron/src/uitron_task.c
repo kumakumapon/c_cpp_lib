@@ -81,6 +81,7 @@ static void terminate_and_requeue(TCB *tcb) {
     tcb->lefttmo = 0;
     tcb->wupcnt = 0;
     tcb->suscnt = 0;
+    tcb->wait_er = E_OK; /* 次の実行に前回の待ち結果を持ち越さない */
     tcb->tskpri = tcb->tskbpri;
     if (tcb->actcnt > 0) {
         tcb->actcnt--;

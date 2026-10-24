@@ -44,7 +44,7 @@
 | **システム時刻** | `set_tim`, `get_tim`, `isig_tim` |
 | **システム状態管理** | `loc_cpu`, `unl_cpu`, `dis_dsp`, `ena_dsp`, `sns_ctx`, `sns_loc`, `sns_dsp`, `sns_dpn` |
 
-> **ブロッキング系サービスコールの注意**: 本ライブラリはホスト/協調実行向けで、呼出元の実行を中断できません。`wai_sem`・`twai_*`・`slp_tsk`・`dly_tsk` など、条件が即時に成立しない待ち系は、タスクを待ち状態へ登録して **`E_WBLK`** を返します(成功 `E_OK` ではありません)。解除は `sig_sem`/`set_flg`/`wup_tsk`/`uitron_os_tick` 等で行われ、状態は `ref_tsk` で確認します。`ext_tsk`/`ter_tsk` は、起動要求がキューイングされていれば再起動します。
+> **ブロッキング系サービスコールの注意**: 本ライブラリはホスト/協調実行向けで、呼出元の実行を中断できません。`wai_sem`・`twai_*`・`slp_tsk`・`dly_tsk` など、条件が即時に成立しない待ち系は、タスクを待ち状態へ登録して **`E_WBLK`** を返します(成功 `E_OK` ではありません)。解除は `sig_sem`/`set_flg`/`wup_tsk`/`uitron_os_tick` 等で行われ、状態は `ref_tsk`、結果(成立・タイムアウトなど)は `uitron_wait_result()` で確認します。`ext_tsk`/`ter_tsk` は、起動要求がキューイングされていれば再起動します。
 
 ### 実行モデル (協調ステップ実行)
 
@@ -58,8 +58,40 @@
 - 待ち行列の順序は `TA_TFIFO` なら待ちに入った順、`TA_TPRI` なら優先度順(同一優先度は待ちに入った順)です。
 - 待ち解除時に結果を書き込む出力先(`wai_flg` の `p_flgptn`、`rcv_mbx` の `ppk_msg`、`get_mpf` の `p_blk`)は、
   待ちが解除されるまで有効でなければなりません。ローカル変数ではなく、静的変数などを渡してください。
-- 待ちの結果(成立・タイムアウト・強制解除・オブジェクト削除)は戻り値として得られません。
-  出力先が更新されたか、`ref_tsk` の状態で判断してください。
+- 待ちの結果(成立・タイムアウト・強制解除・オブジェクト削除)は、待ちが解除された後の次のステップで
+  `uitron_wait_result()` から戻り値として得られます(本ライブラリ独自の拡張)。
+
+  | 戻り値 | 意味 |
+  | :--- | :--- |
+  | `E_OK` | 待ち条件が成立した(資源獲得、メッセージ受信、起床、`dly_tsk` の時間経過など) |
+  | `E_TMOUT` | タイムアウトした |
+  | `E_RLWAI` | `rel_wai` で強制解除された |
+  | `E_DLT` | 待っていたオブジェクトが削除された |
+  | `E_WBLK` | まだ待ち中 |
+
+  結果は最後に待ちへ入った回のものです。待ちを登録せずに戻ったサービスコール(即時成立・ポーリング失敗)は
+  戻り値がそのまま結果なので、`E_WBLK` が返ったときだけ読んでください。タスクが休止状態になると消去されます。
+
+  ```c
+  void consumer_step(void) {
+      static T_MSG *msg;
+      static int waiting = 0;
+      if (waiting) {                       // 待ちが解除された後のステップ
+          waiting = 0;
+          if (uitron_wait_result(TSK_SELF) == E_OK) {
+              handle((Packet *)msg);       // msg に受信メッセージが入っている
+          } else {
+              on_timeout_or_deleted();     // E_TMOUT / E_RLWAI / E_DLT
+          }
+      }
+      ER er = trcv_mbx(MBX_ID, &msg, 100);
+      if (er == E_WBLK) {
+          waiting = 1;                     // 次のステップで結果を読む
+      } else if (er == E_OK) {
+          handle((Packet *)msg);           // 即時に受信できた
+      }
+  }
+  ```
 
 ### テスト
 

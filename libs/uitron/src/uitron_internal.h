@@ -36,7 +36,7 @@ typedef struct tcb {
     /* メモリプール待ち用 */
     VP      *p_mpf_blk;
 
-    ER      wait_er;        /* 待ち解除時のエラーコード */
+    ER      wait_er;        /* 最後の待ちの結果 (E_OK/E_TMOUT/E_RLWAI/E_DLT) */
     uint32_t wait_seq;      /* 待ちに入った順序 (TA_TFIFO の待ち行列順序) */
 } TCB;
 

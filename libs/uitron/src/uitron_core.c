@@ -72,6 +72,17 @@ TCB *uitron_pick_waiter(STAT tskwait, ID wid, BOOL by_priority) {
     return best;
 }
 
+ER uitron_wait_result(ID tskid) {
+    TCB *tcb = uitron_get_tcb(tskid);
+    if (!tcb) {
+        return (tskid == TSK_SELF) ? E_CTX : E_NOEXS;
+    }
+    if (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS) {
+        return E_WBLK;
+    }
+    return tcb->wait_er;
+}
+
 void uitron_task_wakeup(TCB *tcb, ER er) {
     if (!tcb) return;
     /* 二重待ち (待ち+サスペンド) は、待ち解除後もサスペンドを維持する */
