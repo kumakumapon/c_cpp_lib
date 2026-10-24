@@ -103,6 +103,7 @@ static void unregister_session(eip_adapter_t *adapter, uint32_t session_handle) 
 static size_t process_cip_message(eip_adapter_t *adapter, const uint8_t *cip_req, size_t req_len,
                                   uint8_t *cip_resp, size_t max_resp_len) {
     cip_request_t req;
+    memset(&req, 0, sizeof(req)); /* デコード失敗時にも service を未初期化で使わない */
     if (!cip_decode_request(cip_req, req_len, &req)) {
         cip_response_t err_resp;
         memset(&err_resp, 0, sizeof(err_resp));
@@ -221,7 +222,15 @@ size_t eip_adapter_process_packet(eip_adapter_t *adapter, const uint8_t *req_dat
         return 0;
 
     eip_encap_header_t hdr;
-    eip_decode_encap_header(req_data, req_len, &hdr);
+    if (eip_decode_encap_header(req_data, req_len, &hdr) == 0)
+        return 0;
+
+    /* ヘッダの自己申告長が実受信長を超えるパケットは、内部パーサに渡さず拒否する */
+    if (hdr.length > req_len - EIP_ENCAP_HEADER_SIZE) {
+        hdr.status = EIP_STATUS_INCORRECT_DATA;
+        hdr.length = 0;
+        return eip_encode_encap_header(&hdr, resp_data);
+    }
 
     switch (hdr.command) {
     /* ---------------------------------------------------------

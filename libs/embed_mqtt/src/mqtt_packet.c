@@ -37,12 +37,64 @@ size_t mqtt_decode_remaining_length(const uint8_t *src, size_t max_len, size_t *
     return bytes;
 }
 
-static void write_utf8_string(uint8_t *buf, size_t *offset, const char *str) {
-    uint16_t len = (uint16_t)strlen(str);
-    buf[(*offset)++] = (uint8_t)((len >> 8) & 0xFF);
-    buf[(*offset)++] = (uint8_t)(len & 0xFF);
-    memcpy(&buf[*offset], str, len);
-    *offset += len;
+/* 出力バッファへの境界検査付き書き込み。1度でも溢れると ok=false になり以降は何も書かない */
+typedef struct {
+    uint8_t *buf;
+    size_t cap;
+    size_t len;
+    bool ok;
+} pkt_writer_t;
+
+static void w_bytes(pkt_writer_t *w, const void *src, size_t n) {
+    if (!w->ok) return;
+    if (n > w->cap - w->len) {
+        w->ok = false;
+        return;
+    }
+    if (n > 0) memcpy(&w->buf[w->len], src, n);
+    w->len += n;
+}
+
+static void w_u8(pkt_writer_t *w, uint8_t v) { w_bytes(w, &v, 1); }
+
+static void w_u16(pkt_writer_t *w, size_t v) {
+    if (v > 0xFFFF) {
+        w->ok = false;
+        return;
+    }
+    uint8_t b[2] = {(uint8_t)((v >> 8) & 0xFF), (uint8_t)(v & 0xFF)};
+    w_bytes(w, b, 2);
+}
+
+static void w_utf8(pkt_writer_t *w, const char *str, size_t len) {
+    w_u16(w, len);
+    w_bytes(w, str, len);
+}
+
+/* Remaining Length のバイト数。符号化できない長さ(>268435455)は 0 */
+static size_t remaining_length_bytes(size_t length) {
+    if (length <= 127) return 1;
+    if (length <= 16383) return 2;
+    if (length <= 2097151) return 3;
+    if (length <= 268435455) return 4;
+    return 0;
+}
+
+/* 固定ヘッダ(1B + Remaining Length)を書く。出力全体が buf_size に収まらなければ何も書かず false */
+static bool begin_packet(pkt_writer_t *w, uint8_t *buf, size_t buf_size, uint8_t header_byte,
+                         size_t rem_len) {
+    size_t rl_bytes = remaining_length_bytes(rem_len);
+    w->buf = buf;
+    w->cap = buf_size;
+    w->len = 0;
+    w->ok = false;
+    if (rl_bytes == 0 || rem_len > buf_size || 1 + rl_bytes > buf_size - rem_len) return false;
+    w->ok = true;
+    w_u8(w, header_byte);
+    uint8_t rl[4];
+    mqtt_encode_remaining_length(rem_len, rl);
+    w_bytes(w, rl, rl_bytes);
+    return w->ok;
 }
 
 /* ---------------------------------------------------------
@@ -51,113 +103,78 @@ static void write_utf8_string(uint8_t *buf, size_t *offset, const char *str) {
 bool mqtt_serialize_connect(const mqtt_connect_options_t *options, uint8_t *buf, size_t buf_size, size_t *out_len) {
     if (!options || !options->client_id || !buf || !out_len) return false;
 
-    uint8_t var_header_and_payload[MQTT_MAX_PACKET_SIZE];
-    size_t v_len = 0;
+    const bool has_will = options->will_topic && options->will_message;
+    const size_t id_len = strlen(options->client_id);
+    const size_t will_topic_len = has_will ? strlen(options->will_topic) : 0;
+    const size_t user_len = options->username ? strlen(options->username) : 0;
+    const size_t pass_len = options->password ? strlen(options->password) : 0;
 
-    /* Variable Header */
-    /* Protocol Name: "MQTT" */
-    var_header_and_payload[v_len++] = 0x00;
-    var_header_and_payload[v_len++] = 0x04;
-    var_header_and_payload[v_len++] = 'M';
-    var_header_and_payload[v_len++] = 'Q';
-    var_header_and_payload[v_len++] = 'T';
-    var_header_and_payload[v_len++] = 'T';
+    /* 各フィールドは 2 バイト長プレフィックスで表現できる範囲に限る */
+    if (id_len > 0xFFFF || will_topic_len > 0xFFFF || user_len > 0xFFFF || pass_len > 0xFFFF) return false;
 
-    /* Protocol Level: 4 (v3.1.1) */
-    var_header_and_payload[v_len++] = MQTT_PROTOCOL_VERSION_3_1_1;
+    size_t rem_len = 10 + 2 + id_len;
+    if (has_will) rem_len += 2 + will_topic_len + 2 + options->will_message_len;
+    if (options->username) rem_len += 2 + user_len;
+    if (options->password) rem_len += 2 + pass_len;
 
-    /* Connect Flags */
+    pkt_writer_t w;
+    if (!begin_packet(&w, buf, buf_size, (uint8_t)(MQTT_PACKET_TYPE_CONNECT << 4), rem_len)) return false;
+
+    /* Variable Header: Protocol Name "MQTT" + Level 4 (v3.1.1) */
+    static const uint8_t proto[] = {0x00, 0x04, 'M', 'Q', 'T', 'T', MQTT_PROTOCOL_VERSION_3_1_1};
+    w_bytes(&w, proto, sizeof(proto));
+
     uint8_t flags = 0;
     if (options->clean_session) flags |= 0x02;
-    if (options->will_topic && options->will_message) {
-        flags |= 0x04; // Will Flag
+    if (has_will) {
+        flags |= 0x04; /* Will Flag */
         flags |= (uint8_t)((options->will_qos & 0x03) << 3);
         if (options->will_retain) flags |= 0x20;
     }
     if (options->password) flags |= 0x40;
     if (options->username) flags |= 0x80;
-    var_header_and_payload[v_len++] = flags;
+    w_u8(&w, flags);
 
-    /* Keep Alive (2 bytes) */
     uint16_t keep_alive = options->keep_alive_sec ? options->keep_alive_sec : MQTT_DEFAULT_KEEP_ALIVE;
-    var_header_and_payload[v_len++] = (uint8_t)((keep_alive >> 8) & 0xFF);
-    var_header_and_payload[v_len++] = (uint8_t)(keep_alive & 0xFF);
+    w_u16(&w, keep_alive);
 
     /* Payload */
-    /* 1. Client ID */
-    write_utf8_string(var_header_and_payload, &v_len, options->client_id);
-
-    /* 2. Will Topic & Message */
-    if (options->will_topic && options->will_message) {
-        write_utf8_string(var_header_and_payload, &v_len, options->will_topic);
-        var_header_and_payload[v_len++] = (uint8_t)((options->will_message_len >> 8) & 0xFF);
-        var_header_and_payload[v_len++] = (uint8_t)(options->will_message_len & 0xFF);
-        memcpy(&var_header_and_payload[v_len], options->will_message, options->will_message_len);
-        v_len += options->will_message_len;
+    w_utf8(&w, options->client_id, id_len);
+    if (has_will) {
+        w_utf8(&w, options->will_topic, will_topic_len);
+        w_u16(&w, options->will_message_len);
+        w_bytes(&w, options->will_message, options->will_message_len);
     }
+    if (options->username) w_utf8(&w, options->username, user_len);
+    if (options->password) w_utf8(&w, options->password, pass_len);
 
-    /* 3. Username */
-    if (options->username) {
-        write_utf8_string(var_header_and_payload, &v_len, options->username);
-    }
-
-    /* 4. Password */
-    if (options->password) {
-        write_utf8_string(var_header_and_payload, &v_len, options->password);
-    }
-
-    /* Fixed Header */
-    buf[0] = (uint8_t)(MQTT_PACKET_TYPE_CONNECT << 4);
-    size_t rem_len_bytes = mqtt_encode_remaining_length(v_len, &buf[1]);
-
-    if (1 + rem_len_bytes + v_len > buf_size) {
-        return false;
-    }
-
-    memcpy(&buf[1 + rem_len_bytes], var_header_and_payload, v_len);
-    *out_len = 1 + rem_len_bytes + v_len;
+    if (!w.ok || w.len != 1 + remaining_length_bytes(rem_len) + rem_len) return false;
+    *out_len = w.len;
     return true;
 }
 
 bool mqtt_serialize_publish(const mqtt_message_t *msg, uint8_t *buf, size_t buf_size, size_t *out_len) {
     if (!msg || !msg->topic || !buf || !out_len) return false;
+    if (msg->qos > MQTT_QOS_2) return false;
+    if (msg->payload_len > 0 && !msg->payload) return false;
 
-    uint16_t topic_len = (uint16_t)(msg->topic_len ? msg->topic_len : strlen(msg->topic));
+    size_t topic_len = msg->topic_len ? msg->topic_len : strlen(msg->topic);
+    if (topic_len > 0xFFFF || msg->payload_len > SIZE_MAX / 2) return false;
     size_t rem_len = 2 + topic_len + (msg->qos > 0 ? 2 : 0) + msg->payload_len;
 
-    /* Fixed Header Byte 1 */
     uint8_t header_byte = (uint8_t)(MQTT_PACKET_TYPE_PUBLISH << 4);
     if (msg->dup) header_byte |= 0x08;
     header_byte |= (uint8_t)((msg->qos & 0x03) << 1);
     if (msg->retain) header_byte |= 0x01;
-    buf[0] = header_byte;
 
-    size_t rem_len_bytes = mqtt_encode_remaining_length(rem_len, &buf[1]);
-    size_t offset = 1 + rem_len_bytes;
+    pkt_writer_t w;
+    if (!begin_packet(&w, buf, buf_size, header_byte, rem_len)) return false;
+    w_utf8(&w, msg->topic, topic_len);
+    if (msg->qos > 0) w_u16(&w, msg->packet_id);
+    w_bytes(&w, msg->payload, msg->payload_len);
 
-    if (offset + rem_len > buf_size) {
-        return false;
-    }
-
-    /* Topic Name */
-    buf[offset++] = (uint8_t)((topic_len >> 8) & 0xFF);
-    buf[offset++] = (uint8_t)(topic_len & 0xFF);
-    memcpy(&buf[offset], msg->topic, topic_len);
-    offset += topic_len;
-
-    /* Packet Identifier (QoS > 0 のみ) */
-    if (msg->qos > 0) {
-        buf[offset++] = (uint8_t)((msg->packet_id >> 8) & 0xFF);
-        buf[offset++] = (uint8_t)(msg->packet_id & 0xFF);
-    }
-
-    /* Payload */
-    if (msg->payload_len > 0 && msg->payload) {
-        memcpy(&buf[offset], msg->payload, msg->payload_len);
-        offset += msg->payload_len;
-    }
-
-    *out_len = offset;
+    if (!w.ok) return false;
+    *out_len = w.len;
     return true;
 }
 
@@ -172,55 +189,37 @@ bool mqtt_serialize_puback(uint16_t packet_id, uint8_t *buf, size_t buf_size, si
 }
 
 bool mqtt_serialize_subscribe(uint16_t packet_id, const char *topic, mqtt_qos_t qos, uint8_t *buf, size_t buf_size, size_t *out_len) {
-    if (!topic || !buf || !out_len) return false;
+    if (!topic || !buf || !out_len || qos > MQTT_QOS_2) return false;
 
-    uint16_t topic_len = (uint16_t)strlen(topic);
+    size_t topic_len = strlen(topic);
+    if (topic_len > 0xFFFF) return false;
     size_t rem_len = 2 + 2 + topic_len + 1; // Packet ID(2) + TopicLen(2) + Topic + QoS(1)
 
-    buf[0] = (uint8_t)((MQTT_PACKET_TYPE_SUBSCRIBE << 4) | 0x02);
-    size_t rem_len_bytes = mqtt_encode_remaining_length(rem_len, &buf[1]);
-    size_t offset = 1 + rem_len_bytes;
+    pkt_writer_t w;
+    if (!begin_packet(&w, buf, buf_size, (uint8_t)((MQTT_PACKET_TYPE_SUBSCRIBE << 4) | 0x02), rem_len)) return false;
+    w_u16(&w, packet_id);
+    w_utf8(&w, topic, topic_len);
+    w_u8(&w, (uint8_t)(qos & 0x03));
 
-    if (offset + rem_len > buf_size) return false;
-
-    /* Packet ID */
-    buf[offset++] = (uint8_t)((packet_id >> 8) & 0xFF);
-    buf[offset++] = (uint8_t)(packet_id & 0xFF);
-
-    /* Topic */
-    buf[offset++] = (uint8_t)((topic_len >> 8) & 0xFF);
-    buf[offset++] = (uint8_t)(topic_len & 0xFF);
-    memcpy(&buf[offset], topic, topic_len);
-    offset += topic_len;
-
-    /* Requested QoS */
-    buf[offset++] = (uint8_t)(qos & 0x03);
-
-    *out_len = offset;
+    if (!w.ok) return false;
+    *out_len = w.len;
     return true;
 }
 
 bool mqtt_serialize_unsubscribe(uint16_t packet_id, const char *topic, uint8_t *buf, size_t buf_size, size_t *out_len) {
     if (!topic || !buf || !out_len) return false;
 
-    uint16_t topic_len = (uint16_t)strlen(topic);
+    size_t topic_len = strlen(topic);
+    if (topic_len > 0xFFFF) return false;
     size_t rem_len = 2 + 2 + topic_len; // Packet ID(2) + TopicLen(2) + Topic
 
-    buf[0] = (uint8_t)((MQTT_PACKET_TYPE_UNSUBSCRIBE << 4) | 0x02);
-    size_t rem_len_bytes = mqtt_encode_remaining_length(rem_len, &buf[1]);
-    size_t offset = 1 + rem_len_bytes;
+    pkt_writer_t w;
+    if (!begin_packet(&w, buf, buf_size, (uint8_t)((MQTT_PACKET_TYPE_UNSUBSCRIBE << 4) | 0x02), rem_len)) return false;
+    w_u16(&w, packet_id);
+    w_utf8(&w, topic, topic_len);
 
-    if (offset + rem_len > buf_size) return false;
-
-    buf[offset++] = (uint8_t)((packet_id >> 8) & 0xFF);
-    buf[offset++] = (uint8_t)(packet_id & 0xFF);
-
-    buf[offset++] = (uint8_t)((topic_len >> 8) & 0xFF);
-    buf[offset++] = (uint8_t)(topic_len & 0xFF);
-    memcpy(&buf[offset], topic, topic_len);
-    offset += topic_len;
-
-    *out_len = offset;
+    if (!w.ok) return false;
+    *out_len = w.len;
     return true;
 }
 
@@ -289,12 +288,16 @@ mqtt_status_t mqtt_deserialize_publish(const uint8_t *buf, size_t len, mqtt_mess
     }
 
     size_t offset = 1 + rem_len_bytes;
+    const size_t packet_end = offset + rem_len; /* 以降の解析はこのパケット内に限定する */
+
+    if (msg->qos > MQTT_QOS_2) return MQTT_ERR_MALFORMED_PACKET;
+    if (rem_len < 2) return MQTT_ERR_MALFORMED_PACKET;
 
     /* Topic length */
     uint16_t topic_len = (uint16_t)((buf[offset] << 8) | buf[offset + 1]);
     offset += 2;
 
-    if (offset + topic_len > len) return MQTT_ERR_MALFORMED_PACKET;
+    if (topic_len > packet_end - offset) return MQTT_ERR_MALFORMED_PACKET;
 
     msg->topic = (const char *)&buf[offset];
     msg->topic_len = topic_len;
@@ -302,7 +305,7 @@ mqtt_status_t mqtt_deserialize_publish(const uint8_t *buf, size_t len, mqtt_mess
 
     /* Packet ID (QoS > 0) */
     if (msg->qos > 0) {
-        if (offset + 2 > len) return MQTT_ERR_MALFORMED_PACKET;
+        if (packet_end - offset < 2) return MQTT_ERR_MALFORMED_PACKET;
         msg->packet_id = (uint16_t)((buf[offset] << 8) | buf[offset + 1]);
         offset += 2;
     } else {
@@ -310,10 +313,8 @@ mqtt_status_t mqtt_deserialize_publish(const uint8_t *buf, size_t len, mqtt_mess
     }
 
     /* Payload */
-    size_t total_header_len = offset;
-    size_t full_packet_len = 1 + rem_len_bytes + rem_len;
     msg->payload = &buf[offset];
-    msg->payload_len = full_packet_len - total_header_len;
+    msg->payload_len = packet_end - offset;
 
     return MQTT_OK;
 }
@@ -330,7 +331,7 @@ mqtt_status_t mqtt_deserialize_puback(const uint8_t *buf, size_t len, uint16_t *
 
 mqtt_status_t mqtt_deserialize_suback(const uint8_t *buf, size_t len, uint16_t *packet_id, mqtt_qos_t *granted_qos) {
     if (!buf || len < 5 || !packet_id || !granted_qos) return MQTT_ERR_INVALID_PARAM;
-    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_SUBACK) return MQTT_ERR_MALFORMED_PACKET;
+    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_SUBACK || buf[1] != 3) return MQTT_ERR_MALFORMED_PACKET;
 
     *packet_id = (uint16_t)((buf[2] << 8) | buf[3]);
     *granted_qos = (mqtt_qos_t)buf[4];
@@ -339,7 +340,7 @@ mqtt_status_t mqtt_deserialize_suback(const uint8_t *buf, size_t len, uint16_t *
 
 mqtt_status_t mqtt_deserialize_unsuback(const uint8_t *buf, size_t len, uint16_t *packet_id) {
     if (!buf || len < 4 || !packet_id) return MQTT_ERR_INVALID_PARAM;
-    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_UNSUBACK) return MQTT_ERR_MALFORMED_PACKET;
+    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_UNSUBACK || buf[1] != 2) return MQTT_ERR_MALFORMED_PACKET;
 
     *packet_id = (uint16_t)((buf[2] << 8) | buf[3]);
     return MQTT_OK;

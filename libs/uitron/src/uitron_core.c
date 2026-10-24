@@ -45,7 +45,8 @@ void uitron_task_wait(TCB *tcb, STAT tskwait, ID wid, TMO tmout) {
 
 void uitron_task_wakeup(TCB *tcb, ER er) {
     if (!tcb) return;
-    tcb->tskstat = TTS_RDY;
+    /* 二重待ち (待ち+サスペンド) は、待ち解除後もサスペンドを維持する */
+    tcb->tskstat = (tcb->tskstat == TTS_WAS) ? TTS_SUS : TTS_RDY;
     tcb->tskwait = 0;
     tcb->wid = 0;
     tcb->lefttmo = 0;
@@ -103,7 +104,7 @@ void uitron_os_tick(RELTIM ms) {
             if (tcb->lefttmo != TMO_FEVR && tcb->lefttmo > 0) {
                 if (tcb->lefttmo <= ms) {
                     /* タイムアウト発生 */
-                    uitron_task_wakeup(tcb, E_TMOUT);
+                    uitron_task_wakeup(tcb, tcb->tskwait == TTW_DLY ? E_OK : E_TMOUT);
                 } else {
                     tcb->lefttmo -= ms;
                 }

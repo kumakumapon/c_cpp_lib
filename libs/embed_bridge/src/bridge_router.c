@@ -39,6 +39,16 @@ void bridge_router_bind_mqtt(bridge_router_t *router, mqtt_client_t *mqtt_client
     router->mqtt_client = mqtt_client;
 }
 
+/* double -> 整数のサチュレーション変換 (範囲外・NaN でも未定義動作にしない) */
+static double clamp_d(double v, double lo, double hi) {
+    if (v != v) return 0.0;
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+static int16_t to_i16(double v) { return (int16_t)clamp_d(v, -32768.0, 32767.0); }
+static uint16_t to_u16(double v) { return (uint16_t)clamp_d(v, 0.0, 65535.0); }
+static int32_t to_i32(double v) { return (int32_t)clamp_d(v, -2147483648.0, 2147483647.0); }
+static uint32_t to_u32(double v) { return (uint32_t)clamp_d(v, 0.0, 4294967295.0); }
+
 static size_t get_type_size(bridge_data_type_t t) {
     switch (t) {
     case BRIDGE_TYPE_BOOL:
@@ -60,6 +70,8 @@ int bridge_router_add_rule(bridge_router_t *router, const bridge_rule_t *rule) {
         return -1;
     if (router->rule_count >= BRIDGE_MAX_RULES)
         return -1;
+    if (rule->data_size > BRIDGE_MAX_DATA_SIZE)
+        return -1;
 
     size_t idx = router->rule_count;
     router->rules[idx] = *rule;
@@ -77,7 +89,7 @@ int bridge_router_add_rule(bridge_router_t *router, const bridge_rule_t *rule) {
 }
 
 static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t *ep,
-                          bridge_data_type_t src_type, size_t sz, uint8_t *buf, float *out_val) {
+                          bridge_data_type_t src_type, size_t sz, uint8_t *buf, double *out_val) {
     if (!router || !ep || !buf || !out_val)
         return false;
 
@@ -119,27 +131,27 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
         switch (dv.value.type) {
         case OPCUA_TYPE_BOOLEAN: {
             buf[0] = dv.value.value.boolean ? 1 : 0;
-            *out_val = (float)buf[0];
+            *out_val = (double)buf[0];
             return true;
         }
         case OPCUA_TYPE_INT16: {
             memcpy(buf, &dv.value.value.int16_val, 2);
-            *out_val = (float)dv.value.value.int16_val;
+            *out_val = (double)dv.value.value.int16_val;
             return true;
         }
         case OPCUA_TYPE_UINT16: {
             memcpy(buf, &dv.value.value.uint16_val, 2);
-            *out_val = (float)dv.value.value.uint16_val;
+            *out_val = (double)dv.value.value.uint16_val;
             return true;
         }
         case OPCUA_TYPE_INT32: {
             memcpy(buf, &dv.value.value.int32_val, 4);
-            *out_val = (float)dv.value.value.int32_val;
+            *out_val = (double)dv.value.value.int32_val;
             return true;
         }
         case OPCUA_TYPE_UINT32: {
             memcpy(buf, &dv.value.value.uint32_val, 4);
-            *out_val = (float)dv.value.value.uint32_val;
+            *out_val = (double)dv.value.value.uint32_val;
             return true;
         }
         case OPCUA_TYPE_FLOAT: {
@@ -150,7 +162,7 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
         case OPCUA_TYPE_DOUBLE: {
             float f = (float)dv.value.value.double_val;
             memcpy(buf, &f, 4);
-            *out_val = f;
+            *out_val = dv.value.value.double_val;
             return true;
         }
         default:
@@ -191,31 +203,31 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
     // 数値の抽出
     switch (src_type) {
     case BRIDGE_TYPE_BOOL: {
-        *out_val = (float)(buf[0]);
+        *out_val = (double)(buf[0]);
         break;
     }
     case BRIDGE_TYPE_INT16: {
         int16_t v;
         memcpy(&v, buf, 2);
-        *out_val = (float)v;
+        *out_val = (double)v;
         break;
     }
     case BRIDGE_TYPE_UINT16: {
         uint16_t v;
         memcpy(&v, buf, 2);
-        *out_val = (float)v;
+        *out_val = (double)v;
         break;
     }
     case BRIDGE_TYPE_INT32: {
         int32_t v;
         memcpy(&v, buf, 4);
-        *out_val = (float)v;
+        *out_val = (double)v;
         break;
     }
     case BRIDGE_TYPE_UINT32: {
         uint32_t v;
         memcpy(&v, buf, 4);
-        *out_val = (float)v;
+        *out_val = (double)v;
         break;
     }
     case BRIDGE_TYPE_FLOAT: {
@@ -233,7 +245,7 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
 }
 
 static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
-                           bridge_data_type_t dst_type, size_t sz, const uint8_t *buf, float val) {
+                           bridge_data_type_t dst_type, size_t sz, const uint8_t *buf, double val) {
     if (!router || !ep || !buf)
         return false;
 
@@ -278,23 +290,23 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
             break;
         case BRIDGE_TYPE_INT16:
             var.type = OPCUA_TYPE_INT16;
-            var.value.int16_val = (int16_t)val;
+            var.value.int16_val = to_i16(val);
             break;
         case BRIDGE_TYPE_UINT16:
             var.type = OPCUA_TYPE_UINT16;
-            var.value.uint16_val = (uint16_t)val;
+            var.value.uint16_val = to_u16(val);
             break;
         case BRIDGE_TYPE_INT32:
             var.type = OPCUA_TYPE_INT32;
-            var.value.int32_val = (int32_t)val;
+            var.value.int32_val = to_i32(val);
             break;
         case BRIDGE_TYPE_UINT32:
             var.type = OPCUA_TYPE_UINT32;
-            var.value.uint32_val = (uint32_t)val;
+            var.value.uint32_val = to_u32(val);
             break;
         case BRIDGE_TYPE_FLOAT:
             var.type = OPCUA_TYPE_FLOAT;
-            var.value.float_val = val;
+            var.value.float_val = (float)val;
             break;
         default:
             return false;
@@ -335,9 +347,9 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
         if (dst_type == BRIDGE_TYPE_FLOAT) {
             snprintf(payload, sizeof(payload), "%.2f", val);
         } else if (dst_type == BRIDGE_TYPE_INT16 || dst_type == BRIDGE_TYPE_INT32) {
-            snprintf(payload, sizeof(payload), "%d", (int32_t)val);
+            snprintf(payload, sizeof(payload), "%d", to_i32(val));
         } else {
-            snprintf(payload, sizeof(payload), "%u", (uint32_t)val);
+            snprintf(payload, sizeof(payload), "%u", to_u32(val));
         }
         return mqtt_client_publish(router->mqtt_client, ep->target.mqtt_topic, payload,
                                    strlen(payload), MQTT_QOS_0, false);
@@ -353,7 +365,7 @@ static bool sync_rule(bridge_router_t *router, bridge_rule_t *rule) {
         return false;
 
     uint8_t src_buf[BRIDGE_MAX_DATA_SIZE] = {0};
-    float raw_val = 0.0f;
+    double raw_val = 0.0;
 
     if (!read_endpoint(router, &rule->src, rule->src_type, rule->data_size, src_buf, &raw_val)) {
         return false;
@@ -367,9 +379,9 @@ static bool sync_rule(bridge_router_t *router, bridge_rule_t *rule) {
     }
 
     // スケール変換の適用
-    float final_val = raw_val;
+    double final_val = raw_val;
     if (rule->scale != 0.0f) {
-        final_val = (raw_val * rule->scale) + rule->offset;
+        final_val = (raw_val * (double)rule->scale) + (double)rule->offset;
     }
 
     // 再エンコード
@@ -382,27 +394,27 @@ static bool sync_rule(bridge_router_t *router, bridge_rule_t *rule) {
         break;
     }
     case BRIDGE_TYPE_INT16: {
-        int16_t v = (int16_t)final_val;
+        int16_t v = to_i16(final_val);
         memcpy(dst_buf, &v, 2);
         break;
     }
     case BRIDGE_TYPE_UINT16: {
-        uint16_t v = (uint16_t)final_val;
+        uint16_t v = to_u16(final_val);
         memcpy(dst_buf, &v, 2);
         break;
     }
     case BRIDGE_TYPE_INT32: {
-        int32_t v = (int32_t)final_val;
+        int32_t v = to_i32(final_val);
         memcpy(dst_buf, &v, 4);
         break;
     }
     case BRIDGE_TYPE_UINT32: {
-        uint32_t v = (uint32_t)final_val;
+        uint32_t v = to_u32(final_val);
         memcpy(dst_buf, &v, 4);
         break;
     }
     case BRIDGE_TYPE_FLOAT: {
-        float v = final_val;
+        float v = (float)final_val;
         memcpy(dst_buf, &v, 4);
         break;
     }

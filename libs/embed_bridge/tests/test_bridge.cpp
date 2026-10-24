@@ -179,4 +179,82 @@ TEST_CASE(modbus_tcp_register_bank) {
     CHECK_EQ(embed_modbus_tcp_handle(&slave, req, sizeof(req), resp, sizeof(resp)), 9u);
     CHECK_EQ(resp[8], MODBUS_EX_ILLEGAL_DATA_ADDRESS);
 }
+
+// ---- 回帰テスト: 数値変換 / data_size 検証 (レビュー指摘) ----
+static bridge_rule_t raw_rule(void *src, void *dst, bridge_data_type_t st, bridge_data_type_t dt) {
+    bridge_rule_t r;
+    std::memset(&r, 0, sizeof(r));
+    r.src.proto = BRIDGE_PROTO_RAW_VAR;
+    r.src.target.raw_ptr = src;
+    r.dst.proto = BRIDGE_PROTO_RAW_VAR;
+    r.dst.target.raw_ptr = dst;
+    r.src_type = st;
+    r.dst_type = dt;
+    r.sync_mode = BRIDGE_SYNC_ALWAYS;
+    return r;
+}
+
+TEST_CASE(regression_bridge_32bit_copy_is_lossless) {
+    bridge_router_t router;
+    bridge_router_init(&router);
+    uint32_t src = 16777217u; // 2^24 + 1: float では表現できない
+    uint32_t dst = 0;
+    bridge_rule_t r = raw_rule(&src, &dst, BRIDGE_TYPE_UINT32, BRIDGE_TYPE_UINT32);
+    REQUIRE(bridge_router_add_rule(&router, &r) >= 0);
+    CHECK_EQ(bridge_router_sync_all(&router), 1u);
+    CHECK_EQ(dst, 16777217u);
+    src = 0xFFFFFFFFu;
+    bridge_router_sync_all(&router);
+    CHECK_EQ(dst, 0xFFFFFFFFu);
+
+    int32_t isrc = INT32_MAX, idst = 0;
+    bridge_router_t r2;
+    bridge_router_init(&r2);
+    bridge_rule_t ri = raw_rule(&isrc, &idst, BRIDGE_TYPE_INT32, BRIDGE_TYPE_INT32);
+    REQUIRE(bridge_router_add_rule(&r2, &ri) >= 0);
+    bridge_router_sync_all(&r2);
+    CHECK_EQ(idst, INT32_MAX);
+    isrc = INT32_MIN;
+    bridge_router_sync_all(&r2);
+    CHECK_EQ(idst, INT32_MIN);
+}
+
+TEST_CASE(regression_bridge_out_of_range_conversion_saturates) {
+    bridge_router_t router;
+    bridge_router_init(&router);
+    int32_t src = 70000;
+    int16_t dst = 0;
+    bridge_rule_t r = raw_rule(&src, &dst, BRIDGE_TYPE_INT32, BRIDGE_TYPE_INT16);
+    REQUIRE(bridge_router_add_rule(&router, &r) >= 0);
+    bridge_router_sync_all(&router);
+    CHECK_EQ(dst, INT16_MAX);
+    src = -70000;
+    bridge_router_sync_all(&router);
+    CHECK_EQ(dst, INT16_MIN);
+
+    float fsrc = -5.0f;
+    uint16_t udst = 123;
+    bridge_router_t r2;
+    bridge_router_init(&r2);
+    bridge_rule_t rf = raw_rule(&fsrc, &udst, BRIDGE_TYPE_FLOAT, BRIDGE_TYPE_UINT16);
+    REQUIRE(bridge_router_add_rule(&r2, &rf) >= 0);
+    bridge_router_sync_all(&r2);
+    CHECK_EQ(udst, 0);
+    fsrc = std::nanf("");
+    bridge_router_sync_all(&r2);
+    CHECK_EQ(udst, 0);
+}
+
+TEST_CASE(regression_bridge_rejects_oversized_data_size) {
+    bridge_router_t router;
+    bridge_router_init(&router);
+    uint8_t src[64] = {}, dst[64] = {};
+    bridge_rule_t r = raw_rule(src, dst, BRIDGE_TYPE_UINT16, BRIDGE_TYPE_UINT16);
+    r.data_size = BRIDGE_MAX_DATA_SIZE + 1;
+    CHECK(bridge_router_add_rule(&router, &r) < 0);
+    CHECK_EQ(router.rule_count, 0u);
+    r.data_size = BRIDGE_MAX_DATA_SIZE;
+    CHECK(bridge_router_add_rule(&router, &r) >= 0);
+}
+
 EMBED_TEST_MAIN()

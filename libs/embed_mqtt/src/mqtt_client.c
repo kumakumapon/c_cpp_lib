@@ -11,6 +11,13 @@ void mqtt_client_init(mqtt_client_t *client, mqtt_send_fn send_fn, void *user_da
     client->keep_alive_sec = MQTT_DEFAULT_KEEP_ALIVE;
 }
 
+/* Packet Identifier 0 は不正値のため、ラップアラウンド時に飛ばす */
+static uint16_t next_packet_id(mqtt_client_t *client) {
+    uint16_t id = client->next_packet_id++;
+    if (client->next_packet_id == 0) client->next_packet_id = 1;
+    return id ? id : next_packet_id(client);
+}
+
 void mqtt_client_set_callbacks(mqtt_client_t *client,
                                mqtt_on_connect_fn on_connect,
                                mqtt_on_message_fn on_message,
@@ -51,7 +58,7 @@ bool mqtt_client_publish(mqtt_client_t *client, const char *topic, const void *p
     msg.qos = qos;
     msg.retain = retain;
     msg.dup = false;
-    msg.packet_id = (qos > MQTT_QOS_0) ? client->next_packet_id++ : 0;
+    msg.packet_id = (qos > MQTT_QOS_0) ? next_packet_id(client) : 0;
 
     uint8_t tx_buf[MQTT_MAX_PACKET_SIZE];
     size_t tx_len = 0;
@@ -67,7 +74,7 @@ bool mqtt_client_publish(mqtt_client_t *client, const char *topic, const void *p
 bool mqtt_client_subscribe(mqtt_client_t *client, const char *topic, mqtt_qos_t qos) {
     if (!client || !topic || !client->send_fn) return false;
 
-    uint16_t packet_id = client->next_packet_id++;
+    uint16_t packet_id = next_packet_id(client);
     uint8_t tx_buf[MQTT_MAX_PACKET_SIZE];
     size_t tx_len = 0;
 
@@ -82,7 +89,7 @@ bool mqtt_client_subscribe(mqtt_client_t *client, const char *topic, mqtt_qos_t 
 bool mqtt_client_unsubscribe(mqtt_client_t *client, const char *topic) {
     if (!client || !topic || !client->send_fn) return false;
 
-    uint16_t packet_id = client->next_packet_id++;
+    uint16_t packet_id = next_packet_id(client);
     uint8_t tx_buf[MQTT_MAX_PACKET_SIZE];
     size_t tx_len = 0;
 

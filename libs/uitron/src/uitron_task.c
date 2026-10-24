@@ -73,13 +73,25 @@ ER_UINT can_act(ID tskid) {
     return (ER_UINT)prev_cnt;
 }
 
+/* 終了したタスクを休止状態へ戻し、起動要求がキューイング済みなら再起動する */
+static void terminate_and_requeue(TCB *tcb) {
+    tcb->tskstat = TTS_DMT;
+    tcb->tskwait = 0;
+    tcb->wid = 0;
+    tcb->lefttmo = 0;
+    tcb->wupcnt = 0;
+    tcb->suscnt = 0;
+    tcb->tskpri = tcb->tskbpri;
+    if (tcb->actcnt > 0) {
+        tcb->actcnt--;
+        tcb->tskstat = TTS_RDY;
+    }
+}
+
 void ext_tsk(void) {
     TCB *tcb = uitron_get_tcb(g_kcb.cur_tskid);
     if (tcb) {
-        tcb->tskstat = TTS_DMT;
-        tcb->actcnt = 0;
-        tcb->wupcnt = 0;
-        tcb->suscnt = 0;
+        terminate_and_requeue(tcb);
         uitron_reschedule();
     }
 }
@@ -98,11 +110,7 @@ ER ter_tsk(ID tskid) {
     if (!tcb) return E_NOEXS;
     if (tcb->tskstat == TTS_DMT) return E_OBJ;
 
-    tcb->tskstat = TTS_DMT;
-    tcb->tskwait = 0;
-    tcb->actcnt = 0;
-    tcb->wupcnt = 0;
-    tcb->suscnt = 0;
+    terminate_and_requeue(tcb);
     uitron_reschedule();
     return E_OK;
 }
@@ -171,7 +179,7 @@ ER tslp_tsk(TMO tmout) {
 
     uitron_task_wait(cur, TTW_SLP, 0, tmout);
     uitron_reschedule();
-    return cur->wait_er;
+    return E_WBLK; /* 呼出元は中断できない: 待ち登録済み (結果は ref_tsk/コールバックで確認) */
 }
 
 ER wup_tsk(ID tskid) {
@@ -272,5 +280,5 @@ ER dly_tsk(RELTIM dlytim) {
 
     uitron_task_wait(cur, TTW_DLY, 0, dlytim);
     uitron_reschedule();
-    return cur->wait_er;
+    return E_WBLK; /* 呼出元は中断できない: 待ち登録済み (結果は ref_tsk/コールバックで確認) */
 }

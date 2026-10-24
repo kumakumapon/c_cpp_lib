@@ -114,7 +114,7 @@ ER twai_sem(ID semid, TMO tmout) {
 
     uitron_task_wait(cur, TTW_SEM, semid, tmout);
     uitron_reschedule();
-    return cur->wait_er;
+    return E_WBLK; /* 呼出元は中断できない: 待ち登録済み (結果は ref_tsk/コールバックで確認) */
 }
 
 ER ref_sem(ID semid, T_RSEM *pk_rsem) {

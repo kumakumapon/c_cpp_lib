@@ -173,4 +173,44 @@ TEST_CASE(test_cpp_adapter_assembly) {
     std::cout << "# [Test] C++ Adapter Assembly I/O passed!" << std::endl;
 }
 
+
+// ---- 回帰テスト: encap 長の検証 / CIP デコード失敗 (レビュー指摘) ----
+TEST_CASE(regression_encap_length_exceeding_packet_is_rejected) {
+    cip_identity_attr_t id{};
+    strcpy(id.product_name, "x");
+    eip_adapter_t adapter;
+    eip_adapter_init(&adapter, &id);
+
+    eip_encap_header_t h{};
+    h.command = EIP_CMD_REGISTER_SESSION;
+    h.length = 4;
+    uint8_t rq[64];
+    size_t n = eip_encode_encap_header(&h, rq);
+    rq[n++] = 1; rq[n++] = 0; rq[n++] = 0; rq[n++] = 0;
+    uint8_t rs[256];
+    size_t rl = eip_adapter_process_packet(&adapter, rq, n, rs, sizeof(rs));
+    eip_encap_header_t rh{};
+    REQUIRE(rl == EIP_ENCAP_HEADER_SIZE + 4);
+    eip_decode_encap_header(rs, rl, &rh);
+
+    // length=200 を主張するが実際は 16 バイトしか無い
+    std::vector<uint8_t> p(EIP_ENCAP_HEADER_SIZE + 16, 0);
+    h.command = EIP_CMD_SEND_RR_DATA;
+    h.session_handle = rh.session_handle;
+    h.length = 200;
+    eip_encode_encap_header(&h, p.data());
+    p[EIP_ENCAP_HEADER_SIZE + 6] = 1;
+    p[EIP_ENCAP_HEADER_SIZE + 8] = 0xB2;
+    p[EIP_ENCAP_HEADER_SIZE + 10] = 100;
+    uint8_t out[512];
+    size_t ol = eip_adapter_process_packet(&adapter, p.data(), p.size(), out, sizeof(out));
+    REQUIRE(ol == EIP_ENCAP_HEADER_SIZE);
+    eip_encap_header_t oh{};
+    eip_decode_encap_header(out, ol, &oh);
+    CHECK(oh.status == EIP_STATUS_INCORRECT_DATA);
+
+    // 短すぎるパケットは無応答
+    CHECK(eip_adapter_process_packet(&adapter, p.data(), EIP_ENCAP_HEADER_SIZE - 1, out, sizeof(out)) == 0);
+}
+
 EMBED_TEST_MAIN()
