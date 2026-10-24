@@ -12,7 +12,7 @@ jobs:
         tables: [OFF, ON]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DEMBED_CRC_TABLES=${{ matrix.tables }}
       - run: cmake --build build --config ${{ matrix.config }} --parallel 4
       - run: ctest --test-dir build -C ${{ matrix.config }} --output-on-failure --output-junit results.xml
@@ -20,7 +20,7 @@ jobs:
       - run: cmake -S tests/install_consumer -B consumer -DCMAKE_PREFIX_PATH="${{ github.workspace }}/stage"
       - run: cmake --build consumer --config ${{ matrix.config }}
       - run: ctest --test-dir consumer -C ${{ matrix.config }} --output-on-failure
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: results-${{ matrix.os }}-${{ matrix.config }}-${{ matrix.tables }}
@@ -33,7 +33,7 @@ jobs:
       ASAN_OPTIONS: detect_leaks=1
       UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
@@ -46,7 +46,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: cmake -S . -B build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release --parallel 4
       - run: ctest --test-dir build -C Release --output-on-failure
