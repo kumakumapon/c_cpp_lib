@@ -1,7 +1,7 @@
-# Issue #15 implementation checkpoint
+# Issue #15 implementation record
 
-Branch: `feature/issue-15-quality-foundation`
-PR: https://github.com/kumakumapon/c_cpp_lib/pull/16
+Status: completed and merged in PR #16 (https://github.com/kumakumapon/c_cpp_lib/pull/16).
+Follow-up review fixes landed in PR #17.
 
 ## Completed scope
 - [x] A-1/B-1: allocation-free test registry, always-active checks, numeric diagnostics, TAP; all 18 original suites migrated.
@@ -27,12 +27,6 @@ PR: https://github.com/kumakumapon/c_cpp_lib/pull/16
 - CI on implementation commits covers all 11 jobs listed above; final status is recorded in PR checks.
 - The expected-failure NDEBUG test passes only when an intentional check failure returns nonzero.
 - No remaining raw assert calls in test sources; git diff --check clean.
-
-## Resume / final gate
-1. Check out the branch; inspect git status and current PR checks.
-2. If checks fail, reproduce the failing matrix configuration, fix, commit and push.
-3. Keep this PR draft until every current-head CI job succeeds, then mark ready for review.
-4. The PR body contains the final validation links and compatibility notes. Do not merge automatically.
 
 ## API constraints
 OPC UA binary APIs now require explicit buffer lengths (source-level breaking change).
