@@ -243,4 +243,73 @@ TEST_CASE(regression_client_packet_id_never_zero) {
     CHECK(id == 1);
 }
 
+// ---- MQTT 3.1.1 4.7 トピックフィルタの規定 ---------------------------------------
+TEST_CASE(topic_filter_multi_level_wildcard_matches_parent_level) {
+    // 4.7.1.2: "sport/tennis/player1/#" は "sport/tennis/player1" 自身にもマッチする
+    CHECK(mqtt_topic_match("sport/tennis/player1/#", "sport/tennis/player1"));
+    CHECK(mqtt_topic_match("sport/tennis/player1/#", "sport/tennis/player1/ranking"));
+    CHECK(mqtt_topic_match("sport/tennis/player1/#", "sport/tennis/player1/score/wimbledon"));
+    CHECK(mqtt_topic_match("sport/#", "sport"));
+    CHECK(!mqtt_topic_match("sport/#", "sports"));
+    CHECK(!mqtt_topic_match("sport/#", "spor"));
+    CHECK(mqtt_topic_match("#", "sport"));
+    CHECK(mqtt_topic_match("#", "/finance")); // 先頭の空レベル
+    // '#' は最後のレベルにだけ置ける
+    CHECK(!mqtt_topic_match("sport/#/ranking", "sport/tennis/ranking"));
+    CHECK(!mqtt_topic_match("sport/tennis#", "sport/tennis"));
+}
+
+TEST_CASE(topic_filter_single_level_wildcard_matches_exactly_one_level) {
+    // 4.7.1.3: "sport/tennis/+" の例
+    CHECK(mqtt_topic_match("sport/tennis/+", "sport/tennis/player1"));
+    CHECK(mqtt_topic_match("sport/tennis/+", "sport/tennis/player2"));
+    CHECK(!mqtt_topic_match("sport/tennis/+", "sport/tennis/player1/ranking"));
+    CHECK(!mqtt_topic_match("sport/tennis/+", "sport/tennis")); // 1レベル足りない
+    // 空のレベルにもマッチする
+    CHECK(mqtt_topic_match("sport/+", "sport/"));
+    CHECK(!mqtt_topic_match("sport/+", "sport"));
+    CHECK(mqtt_topic_match("+", "finance"));
+    CHECK(mqtt_topic_match("+/+", "/finance"));
+    CHECK(mqtt_topic_match("/+", "/finance"));
+    CHECK(!mqtt_topic_match("+", "/finance"));
+    // 中間レベル・複数個
+    CHECK(mqtt_topic_match("+/tennis/#", "sport/tennis/player1"));
+    CHECK(mqtt_topic_match("sport/+/player1", "sport/tennis/player1"));
+    CHECK(!mqtt_topic_match("sport/+/player1", "sport/tennis/player2"));
+    // '+' はレベル全体でなければならない
+    CHECK(!mqtt_topic_match("sport+", "sport"));
+    CHECK(!mqtt_topic_match("sport/+x", "sport/tennis"));
+}
+
+TEST_CASE(topic_filter_exact_levels_and_case) {
+    CHECK(mqtt_topic_match("a/b/c", "a/b/c"));
+    CHECK(!mqtt_topic_match("a/b/c", "a/b"));
+    CHECK(!mqtt_topic_match("a/b", "a/b/c"));
+    CHECK(!mqtt_topic_match("a/b/c", "a/b/cd"));
+    CHECK(!mqtt_topic_match("a/b/cd", "a/b/c"));
+    CHECK(!mqtt_topic_match("A/B", "a/b")); // 大文字小文字は区別する
+    CHECK(!mqtt_topic_match("a/b/", "a/b"));  // 末尾の '/' は空レベルとして区別される
+    CHECK(mqtt_topic_match("a/b/", "a/b/"));
+    // 4.7.3: トピック名・フィルタは1文字以上
+    CHECK(!mqtt_topic_match("", ""));
+    CHECK(!mqtt_topic_match("a", ""));
+    CHECK(!mqtt_topic_match("", "a"));
+    CHECK(!mqtt_topic_match(nullptr, "a"));
+    CHECK(!mqtt_topic_match("a", nullptr));
+}
+
+TEST_CASE(topic_filter_dollar_topics_are_not_matched_by_leading_wildcards) {
+    // 4.7.2: '$' で始まるトピックは、先頭が '#' / '+' のフィルタにマッチしない
+    CHECK(!mqtt_topic_match("#", "$SYS/broker/uptime"));
+    CHECK(!mqtt_topic_match("+/broker/uptime", "$SYS/broker/uptime"));
+    CHECK(!mqtt_topic_match("+/#", "$SYS/broker/uptime"));
+    // 明示的に '$' で始まるフィルタにはマッチする
+    CHECK(mqtt_topic_match("$SYS/#", "$SYS/broker/uptime"));
+    CHECK(mqtt_topic_match("$SYS/+/uptime", "$SYS/broker/uptime"));
+    CHECK(mqtt_topic_match("$SYS/broker/uptime", "$SYS/broker/uptime"));
+    // 先頭以外の '$' は特別扱いしない
+    CHECK(mqtt_topic_match("#", "a/$b"));
+    CHECK(mqtt_topic_match("+/$b", "a/$b"));
+}
+
 EMBED_TEST_MAIN()
