@@ -8,6 +8,11 @@
 
 C/C++言語用のライブラリおよびアプリケーションを統合・管理するためのマルチモジュール・リポジトリです。
 
+A multi-module repository of C/C++ libraries and demo applications for embedded and industrial use
+(Modbus, MQTT, OPC UA, EtherNet/IP, CANopen, μITRON, PID, CRC, fixed-point math and more).
+The libraries avoid dynamic allocation and are built with CMake (C11 / C++20). Released under the MIT License.
+The documentation is primarily written in Japanese.
+
 ---
 
 ## 📁 ディレクトリ構造
