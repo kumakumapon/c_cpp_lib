@@ -2,13 +2,13 @@ add_executable(test_motion
     test_motion.cpp
 )
 
-target_link_libraries(test_motion
-    PRIVATE
-        embed_motion
+# 等加速度運動の解析解を固定するテスト
+add_executable(test_motion_spec
+    test_motion_spec.cpp
 )
 
-target_set_warnings(test_motion)
-
-add_test(NAME test_motion COMMAND test_motion)
-
-target_link_libraries(test_motion PRIVATE embed_test)
+foreach(t test_motion test_motion_spec)
+    target_link_libraries(${t} PRIVATE embed_motion embed_test)
+    target_set_warnings(${t})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()
