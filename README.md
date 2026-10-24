@@ -1,5 +1,11 @@
 # c_cpp_lib
 
+[![CI](https://github.com/kumakumapon/c_cpp_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/kumakumapon/c_cpp_lib/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/kumakumapon/c_cpp_lib)](LICENSE)
+![C11](https://img.shields.io/badge/C-11-blue)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-blue)
+![CMake](https://img.shields.io/badge/build-CMake-064F8C)
+
 C/C++言語用のライブラリおよびアプリケーションを統合・管理するためのマルチモジュール・リポジトリです。
 
 ---
