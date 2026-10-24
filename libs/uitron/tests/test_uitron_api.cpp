@@ -6,8 +6,11 @@
 #include "uitron/kernel.h"
 #include "uitron/uitron_os.h"
 
-static int g_task1_counter = 0;
-static void task1_entry(void) { g_task1_counter++; }
+// このファイルは各サービスコールの戻り値・状態遷移を単体で検証する。タスクの本体は実行しない
+// (uitron_os_run_step() を呼ばない)ので、エントリ関数は呼ばれないことを最後に確認する。
+// 複数タスクが協調動作する検証は test_uitron_scenarios.cpp にある。
+static int g_entry_calls = 0;
+static void never_run_entry(void) { g_entry_calls++; }
 
 TEST_CASE(test_task_management) {
     std::cout << "# [Test] Running task management tests..." << std::endl;
@@ -16,7 +19,7 @@ TEST_CASE(test_task_management) {
     T_CTSK ctsk{};
     ctsk.tskatr = TA_HLNG;
     ctsk.itskpri = 5;
-    ctsk.task = task1_entry;
+    ctsk.task = never_run_entry;
     ctsk.stksz = 1024;
 
     ER er = cre_tsk(1, &ctsk);
@@ -229,99 +232,32 @@ TEST_CASE(test_memory_pool) {
 }
 
 
-// ---- 回帰テスト: レビュー指摘 (待ち系 / 起動要求キュー / 二重待ち) ----
-static void make_running_task(ID id, PRI pri) {
+// ---- 起動要求キュー ---------------------------------------------------------
+TEST_CASE(test_terminate_restarts_when_an_activation_is_queued) {
+    uitron_os_init();
     T_CTSK c{};
     c.tskatr = TA_HLNG | TA_ACT;
-    c.itskpri = pri;
-    c.task = task1_entry;
+    c.itskpri = 3;
+    c.task = never_run_entry;
     c.stksz = 64;
-    CHECK(cre_tsk(id, &c) == E_OK);
-}
+    REQUIRE(cre_tsk(1, &c) == E_OK);
 
-TEST_CASE(regression_blocking_call_does_not_report_success) {
-    uitron_os_init();
-    make_running_task(1, 3);
-    T_CSEM cs{};
-    cs.sematr = TA_TFIFO;
-    cs.isemcnt = 0;
-    cs.maxsem = 1;
-    REQUIRE(cre_sem(1, &cs) == E_OK);
-
-    // 空セマフォの wai_sem は獲得成功(E_OK)を返してはならない
-    CHECK(wai_sem(1) == E_WBLK);
     T_RTSK rt{};
-    REQUIRE(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat == TTS_WAI);
-    CHECK(rt.tskwait == TTW_SEM);
-
-    // sig_sem は待ちタスクを解除し、カウントは増えない
-    CHECK(sig_sem(1) == E_OK);
-    T_RSEM rs{};
-    CHECK(ref_sem(1, &rs) == E_OK);
-    CHECK(rs.semcnt == 0);
-    CHECK(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat != TTS_WAI);
-
-    uitron_os_init();
-    make_running_task(1, 3);
-    CHECK(slp_tsk() == E_WBLK);
-    uitron_os_init();
-    make_running_task(1, 3);
-    CHECK(dly_tsk(100) == E_WBLK);
-    CHECK(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskwait == TTW_DLY);
-    uitron_os_tick(99);
-    CHECK(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat == TTS_WAI);
-    uitron_os_tick(1);
-    CHECK(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat != TTS_WAI);
-}
-
-TEST_CASE(regression_ext_tsk_restarts_queued_activation) {
-    uitron_os_init();
-    make_running_task(1, 3);
-    CHECK(act_tsk(1) == E_OK);
-    CHECK(act_tsk(1) == E_OK);
-    T_RTSK rt{};
-    REQUIRE(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.actcnt == 2);
-    ext_tsk();
+    CHECK(act_tsk(1) == E_OK); // 実行中への起動要求はキューイングされる
     REQUIRE(ref_tsk(1, &rt) == E_OK);
     CHECK(rt.actcnt == 1);
-    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
-    ext_tsk();
-    ext_tsk();
+
+    CHECK(ter_tsk(1) == E_OK); // 強制終了すると、キュー済みの1件で再起動する
     REQUIRE(ref_tsk(1, &rt) == E_OK);
     CHECK(rt.actcnt == 0);
+    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
+
+    CHECK(ter_tsk(1) == E_OK); // キューが空なら休止状態になる
+    REQUIRE(ref_tsk(1, &rt) == E_OK);
     CHECK(rt.tskstat == TTS_DMT);
-
-    // ter_tsk も同様
-    uitron_os_init();
-    make_running_task(1, 3);
-    CHECK(act_tsk(1) == E_OK);
-    CHECK(ter_tsk(1) == E_OK);
-    REQUIRE(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.actcnt == 0);
-    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
+    CHECK(ter_tsk(1) == E_OBJ); // 休止中の終了要求は状態不正
 }
 
-TEST_CASE(regression_wait_suspended_task_stays_suspended_after_timeout) {
-    uitron_os_init();
-    make_running_task(1, 3);
-    CHECK(tslp_tsk(10) == E_WBLK);
-    CHECK(sus_tsk(1) == E_OK);
-    T_RTSK rt{};
-    REQUIRE(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat == TTS_WAS);
-    uitron_os_tick(20);
-    REQUIRE(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat == TTS_SUS);
-    CHECK(rt.suscnt == 1);
-    CHECK(rsm_tsk(1) == E_OK);
-    REQUIRE(ref_tsk(1, &rt) == E_OK);
-    CHECK(rt.tskstat == TTS_RUN || rt.tskstat == TTS_RDY);
-}
+TEST_CASE(test_api_tests_never_executed_a_task_body) { CHECK(g_entry_calls == 0); }
 
 EMBED_TEST_MAIN()

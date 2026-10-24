@@ -1,14 +1,14 @@
+# API単体テスト(エラーコード・状態遷移)
 add_executable(test_uitron
-    test_uitron.cpp
+    test_uitron_api.cpp
+)
+# 複数タスクが協調動作するシナリオテスト
+add_executable(test_uitron_scenarios
+    test_uitron_scenarios.cpp
 )
 
-target_link_libraries(test_uitron
-    PRIVATE
-        uitron
-)
-
-target_set_warnings(test_uitron)
-
-add_test(NAME test_uitron COMMAND test_uitron)
-
-target_link_libraries(test_uitron PRIVATE embed_test)
+foreach(t test_uitron test_uitron_scenarios)
+    target_link_libraries(${t} PRIVATE uitron embed_test)
+    target_set_warnings(${t})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()

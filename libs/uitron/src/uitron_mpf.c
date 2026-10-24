@@ -99,7 +99,7 @@ ER tget_mpf(ID mpfid, VP *p_blk, TMO tmout) {
         return E_TMOUT;
     }
 
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
 
     cur->p_mpf_blk = p_blk;
@@ -113,26 +113,7 @@ ER rel_mpf(ID mpfid, VP blk) {
     PCB *pcb = &g_kcb.pcbs[mpfid];
     if (!pcb->is_created) return E_NOEXS;
 
-    /* 待ちタスクが存在するか探索 */
-    TCB *wait_tcb = NULL;
-    PRI highest_pri = UITRON_MAX_PRI + 1;
-
-    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
-        TCB *tcb = &g_kcb.tcbs[id];
-        if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {
-            if (tcb->tskwait == TTW_MPF && tcb->wid == mpfid) {
-                if (pcb->cmpf.mpfatr & TA_TPRI) {
-                    if (tcb->tskpri < highest_pri) {
-                        highest_pri = tcb->tskpri;
-                        wait_tcb = tcb;
-                    }
-                } else {
-                    wait_tcb = tcb;
-                    break;
-                }
-            }
-        }
-    }
+    TCB *wait_tcb = uitron_pick_waiter(TTW_MPF, mpfid, (pcb->cmpf.mpfatr & TA_TPRI) != 0);
 
     if (wait_tcb) {
         if (wait_tcb->p_mpf_blk) {

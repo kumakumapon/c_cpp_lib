@@ -89,7 +89,7 @@ static void terminate_and_requeue(TCB *tcb) {
 }
 
 void ext_tsk(void) {
-    TCB *tcb = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *tcb = uitron_get_tcb(uitron_caller_tskid());
     if (tcb) {
         terminate_and_requeue(tcb);
         uitron_reschedule();
@@ -97,7 +97,7 @@ void ext_tsk(void) {
 }
 
 void exd_tsk(void) {
-    TCB *tcb = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *tcb = uitron_get_tcb(uitron_caller_tskid());
     if (tcb) {
         tcb->is_created = FALSE;
         tcb->tskstat = TTS_DMT;
@@ -165,7 +165,7 @@ ER slp_tsk(void) {
 }
 
 ER tslp_tsk(TMO tmout) {
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
 
     if (cur->wupcnt > 0) {
@@ -274,7 +274,7 @@ ER rsm_tsk(ID tskid) {
 }
 
 ER dly_tsk(RELTIM dlytim) {
-    TCB *cur = uitron_get_tcb(g_kcb.cur_tskid);
+    TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
     if (dlytim == 0) return E_OK;
 
