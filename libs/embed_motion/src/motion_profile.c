@@ -75,6 +75,8 @@ bool motion_profile_plan(motion_profile_t *prof,
                          const motion_constraints_t *constraints,
                          float start_pos, float target_pos, float start_vel) {
     if (!prof || !constraints) return false;
+    /* 初速つきの計画は未対応。黙って誤った軌道になるより拒否する */
+    if (start_vel != 0.0f) return false;
     if (constraints->max_velocity <= 0.0f || constraints->max_acceleration <= 0.0f || constraints->max_deceleration <= 0.0f) {
         return false;
     }
