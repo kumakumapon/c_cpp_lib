@@ -181,6 +181,12 @@ TEST_CASE(profile_planning_validates_inputs_and_zero_length_moves) {
         CHECK(!motion_profile_plan(&p, MOTION_PROFILE_SCURVE, &bad, 0, 1, 0));
     }
 
+    // 初速つきの計画は未対応なので拒否する (誤った軌道を返さない)
+    for (float v0 : {20.0f, -20.0f, 1e-3f}) {
+        CHECK(!motion_profile_plan(&p, MOTION_PROFILE_TRAPEZOIDAL, &ok, 0, 100, v0));
+        CHECK(!motion_profile_plan(&p, MOTION_PROFILE_SCURVE, &ok, 0, 100, v0));
+    }
+
     // 距離 0 は即座に完了。位置は目標位置
     p = plan(MOTION_PROFILE_TRAPEZOIDAL, ok, 5, 5);
     CHECK_NEAR(p.total_time, 0.0, kTol);

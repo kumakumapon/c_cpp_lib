@@ -17,8 +17,8 @@ extern "C" {
  *                    Jmax <= 0 のとき S字は 5 x Amax を使う (台形は Jmax を使わない)
  * @param start_pos 開始位置
  * @param target_pos 目標位置
- * @param start_vel 開始速度 (現在は 0.0 のみ対応。0 以外を渡しても計画には反映されません)
- * @return true 計画成功
+ * @param start_vel 開始速度 (現在は 0.0 のみ対応。0 以外は拒否されます)
+ * @return true 計画成功 (拘束条件が不正、または start_vel != 0 のとき false)
  */
 bool motion_profile_plan(motion_profile_t *prof,
                          motion_profile_type_t type,
