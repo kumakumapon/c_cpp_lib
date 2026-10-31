@@ -131,7 +131,9 @@ bool path_plan_astar(const path_grid_map_t *map,
     int cx = (int)goal_gx;
     int cy = (int)goal_gy;
 
-    while (cx != -1 && cy != -1 && pt_count < PATH_MAX_WAYPOINTS) {
+    while (cx != -1 && cy != -1) {
+        /* 経路がウェイポイント数の上限を超えるときは、切り捨てた不完全な経路を返さず失敗にする */
+        if (pt_count >= PATH_MAX_WAYPOINTS) return false;
         temp_pts[pt_count].x = map->origin_x + ((float)cx + 0.5f) * map->resolution;
         temp_pts[pt_count].y = map->origin_y + ((float)cy + 0.5f) * map->resolution;
         pt_count++;
@@ -187,8 +189,21 @@ void path_pursuit_compute(const path_pursuit_params_t *params,
     float ld = params->lookahead_distance;
     if (ld < 0.01f) ld = 0.01f;
 
-    size_t target_idx = traj->count - 1;
+    /* 通り過ぎた点を目標にしないよう、機体に最も近い点から先を探す */
+    size_t nearest_idx = 0;
+    float nearest_d2 = FLT_MAX;
     for (size_t i = 0; i < traj->count; ++i) {
+        float ex = traj->points[i].x - current_x;
+        float ey = traj->points[i].y - current_y;
+        float d2 = ex * ex + ey * ey;
+        if (d2 < nearest_d2) {
+            nearest_d2 = d2;
+            nearest_idx = i;
+        }
+    }
+
+    size_t target_idx = traj->count - 1;
+    for (size_t i = nearest_idx; i < traj->count; ++i) {
         float d = sqrtf((traj->points[i].x - current_x) * (traj->points[i].x - current_x) +
                         (traj->points[i].y - current_y) * (traj->points[i].y - current_y));
         if (d >= ld) {
