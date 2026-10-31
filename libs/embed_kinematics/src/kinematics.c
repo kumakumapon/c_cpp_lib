@@ -113,13 +113,11 @@ bool arm2dof_inverse(const arm2dof_params_t *params, float x, float y, bool elbo
     float l1 = params->l1;
     float l2 = params->l2;
 
-    /* リンク長が 0 では肘角が定まらない */
-    if (!(l1 > EPSILON) || !(l2 > EPSILON)) return false;
-
     float r2 = (x * x) + (y * y);
     float cos_q2 = (r2 - (l1 * l1) - (l2 * l2)) / (2.0f * l1 * l2);
 
-    /* 限界ちょうどの点が丸め誤差で外れないよう、わずかな超過は限界に丸める (NaN は拒否) */
+    /* 限界ちょうどの点が丸め誤差で外れないよう、わずかな超過は限界に丸める。
+     * 比較を否定形にしているので、リンク長 0 (0/0 = NaN や ±inf) や NaN の入力は拒否される */
     if (!(cos_q2 >= -1.0f - REACH_TOLERANCE && cos_q2 <= 1.0f + REACH_TOLERANCE)) {
         return false; // 到達不能点 (Workspace外)
     }
