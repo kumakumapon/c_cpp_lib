@@ -40,9 +40,9 @@
     "valid": 38
   },
   "embed_heap": {
-    "rate": 0.3375,
-    "killed": 27,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 81,
+    "valid": 81
   },
   "embed_kinematics": {
     "rate": 0.4444,
