@@ -1097,39 +1097,42 @@ TEST_CASE(every_wait_ends_correctly_in_plain_and_suspended_states) {
 }
 
 TEST_CASE(deleting_an_object_releases_only_its_own_waiters) {
-    fresh();
-    for (ID id = 1; id <= 5; ++id) mk(id, id);
-    mk_sem(1, 0, 1);
-    mk_sem(2, 0, 1);
-    mk_flg(1);
-    mk_mbx(1);
-    mk_mpf(1, 1, 8);
-    VP held = nullptr;
-    pget_mpf(1, &held);
-    UINT p = 0;
-    T_MSG *pm = nullptr;
-    VP blk = nullptr;
-    CHECK_EQ(wai_sem(1), E_WBLK);                           // タスク 1: セマフォ 1
-    CHECK_EQ(wai_flg(1, 1, TWF_ORW, &p), E_WBLK);           // タスク 2: フラグ 1
-    CHECK_EQ(rcv_mbx(1, &pm), E_WBLK);                      // タスク 3: メールボックス 1
-    CHECK_EQ(get_mpf(1, &blk), E_WBLK);                     // タスク 4: メモリプール 1
-    CHECK_EQ(wai_sem(2), E_WBLK);                           // タスク 5: セマフォ 2
-    // 同じ ID 番号でも、種類と番号が違う待ちは巻き込まれない
-    CHECK_EQ(del_sem(1), E_OK);
-    CHECK_EQ(uitron_wait_result(1), E_DLT);
-    for (ID id = 2; id <= 5; ++id) CHECK_EQ(rt(id).tskstat, TTS_WAI);
-    CHECK_EQ(del_flg(1), E_OK);
-    CHECK_EQ(uitron_wait_result(2), E_DLT);
-    for (ID id = 3; id <= 5; ++id) CHECK_EQ(rt(id).tskstat, TTS_WAI);
-    CHECK_EQ(del_mbx(1), E_OK);
-    CHECK_EQ(uitron_wait_result(3), E_DLT);
-    for (ID id = 4; id <= 5; ++id) CHECK_EQ(rt(id).tskstat, TTS_WAI);
-    CHECK_EQ(del_mpf(1), E_OK);
-    CHECK_EQ(uitron_wait_result(4), E_DLT);
-    CHECK_EQ(rt(5).tskstat, TTS_WAI);
-    CHECK_EQ(rt(5).wid, 2);
-    CHECK_EQ(del_sem(2), E_OK);
-    CHECK_EQ(uitron_wait_result(5), E_DLT);
+    // どの 1 つを最初に削除しても、待っているタスクのうち巻き込まれるのはそのオブジェクトの待ちだけ
+    struct Case {
+        ER (*del)();
+        ID waiter;
+    };
+    const Case cases[] = {
+        {[] { return del_sem(1); }, 1}, {[] { return del_flg(1); }, 2}, {[] { return del_mbx(1); }, 3},
+        {[] { return del_mpf(1); }, 4}, {[] { return del_sem(2); }, 5},
+    };
+    for (const Case &c : cases) {
+        fresh();
+        for (ID id = 1; id <= 5; ++id) mk(id, id);
+        mk_sem(1, 0, 1);
+        mk_sem(2, 0, 1);
+        mk_flg(1);
+        mk_mbx(1);
+        mk_mpf(1, 1, 8);
+        VP held = nullptr;
+        pget_mpf(1, &held);
+        UINT p = 0;
+        T_MSG *pm = nullptr;
+        VP blk = nullptr;
+        CHECK_EQ(wai_sem(1), E_WBLK);                 // タスク 1: セマフォ 1
+        CHECK_EQ(wai_flg(1, 1, TWF_ORW, &p), E_WBLK); // タスク 2: フラグ 1
+        CHECK_EQ(rcv_mbx(1, &pm), E_WBLK);            // タスク 3: メールボックス 1
+        CHECK_EQ(get_mpf(1, &blk), E_WBLK);           // タスク 4: メモリプール 1
+        CHECK_EQ(wai_sem(2), E_WBLK);                 // タスク 5: セマフォ 2
+        CHECK_EQ(c.del(), E_OK);
+        for (ID id = 1; id <= 5; ++id) {
+            if (id == c.waiter) {
+                CHECK_EQ(uitron_wait_result(id), E_DLT);
+            } else {
+                CHECK_EQ(rt(id).tskstat, TTS_WAI); // 同じ ID 番号や同じ種類でも巻き込まれない
+            }
+        }
+    }
 }
 
 TEST_CASE(a_signal_reaches_only_its_own_object_and_type) {
