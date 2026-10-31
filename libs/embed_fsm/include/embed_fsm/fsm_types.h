@@ -63,7 +63,8 @@ struct fsm_machine {
     fsm_state_t states[FSM_MAX_STATES];
     size_t state_count;
     fsm_state_id_t current_state;
-    fsm_state_id_t target_state;
+    fsm_state_id_t target_state; /**< 遷移中の遷移先 (遷移していないときは FSM_STATE_NONE) */
+    bool exiting;                /**< on_exit を実行中か (この間の再遷移は受け付けない) */
     void *user_data;
 };
 
