@@ -235,6 +235,7 @@ TEST_CASE(regression_client_packet_id_never_zero) {
         auto *v = static_cast<std::vector<uint8_t> *>(u);
         v->assign(d, d + n);
     }, &sent);
+    c.state = MQTT_STATE_CONNECTED; // 接続前の操作は拒否されるため、接続済みにしておく
     c.next_packet_id = 0xFFFF;
     CHECK(mqtt_client_subscribe(&c, "a", MQTT_QOS_0));
     CHECK(c.next_packet_id == 1);

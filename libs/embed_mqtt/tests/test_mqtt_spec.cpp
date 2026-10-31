@@ -33,7 +33,6 @@ Bytes cat(std::initializer_list<Bytes> parts) {
     for (const Bytes &p : parts) out.insert(out.end(), p.begin(), p.end());
     return out;
 }
-Bytes str(const char *s) { return Bytes(s, s + std::strlen(s)); }
 
 mqtt_connect_options_t opts(const char *id) {
     mqtt_connect_options_t o{};
@@ -776,6 +775,173 @@ TEST_CASE(client_first_ping_is_relative_to_connection_not_to_zero) {
     CHECK(k.wire.sent.empty());
     mqtt_client_yield(&k.c, 100060);
     CHECK_EQ(k.wire.sent.size(), 1u);
+}
+
+// ---- 境界・NULL 引数 ----
+TEST_CASE(field_length_limits_are_65535_bytes) {
+    const std::string ok(65535, 'a'), over(65536, 'a');
+    std::vector<uint8_t> big(200000);
+    size_t n = 0;
+    // PUBLISH のトピック
+    mqtt_message_t m = msg("t", "");
+    m.topic = ok.c_str();
+    CHECK(mqtt_serialize_publish(&m, big.data(), big.size(), &n));
+    m.topic = over.c_str();
+    CHECK(!mqtt_serialize_publish(&m, big.data(), big.size(), &n));
+    // SUBSCRIBE / UNSUBSCRIBE のフィルタ
+    CHECK(mqtt_serialize_subscribe(1, ok.c_str(), MQTT_QOS_0, big.data(), big.size(), &n));
+    CHECK(!mqtt_serialize_subscribe(1, over.c_str(), MQTT_QOS_0, big.data(), big.size(), &n));
+    CHECK(mqtt_serialize_unsubscribe(1, ok.c_str(), big.data(), big.size(), &n));
+    CHECK(!mqtt_serialize_unsubscribe(1, over.c_str(), big.data(), big.size(), &n));
+    // CONNECT の各フィールドは単独でも 65535 バイトまで
+    const uint8_t wm[] = {1};
+    auto conn = [&](const char *id, const char *wt, const char *user, const char *pass) {
+        mqtt_connect_options_t o = opts(id);
+        if (wt) {
+            o.will_topic = wt;
+            o.will_message = wm;
+            o.will_message_len = 1;
+        }
+        o.username = user;
+        o.password = pass;
+        size_t len = 0;
+        return mqtt_serialize_connect(&o, big.data(), big.size(), &len);
+    };
+    CHECK(conn(ok.c_str(), nullptr, nullptr, nullptr));
+    CHECK(!conn(over.c_str(), nullptr, nullptr, nullptr));
+    CHECK(conn("i", ok.c_str(), nullptr, nullptr));
+    CHECK(!conn("i", over.c_str(), nullptr, nullptr));
+    CHECK(conn("i", nullptr, ok.c_str(), nullptr));
+    CHECK(!conn("i", nullptr, over.c_str(), nullptr));
+    CHECK(conn("i", nullptr, "u", ok.c_str()));
+    CHECK(!conn("i", nullptr, "u", over.c_str()));
+    // 遺言メッセージ長 (2 バイト長) の上限
+    mqtt_connect_options_t o = opts("i");
+    std::vector<uint8_t> payload(70000, 0);
+    o.will_topic = "t";
+    o.will_message = payload.data();
+    o.will_message_len = 65535;
+    size_t len = 0;
+    CHECK(mqtt_serialize_connect(&o, big.data(), big.size(), &len));
+}
+
+TEST_CASE(remaining_length_uses_the_shortest_form_when_serializing) {
+    std::vector<uint8_t> big(3000000);
+    for (size_t payload : {size_t(16380), size_t(16381), size_t(2097148), size_t(2097149)}) {
+        std::vector<char> data(payload, 'p');
+        mqtt_message_t m = msg("t", nullptr);
+        m.payload = reinterpret_cast<const uint8_t *>(data.data());
+        m.payload_len = payload;
+        size_t n = 0;
+        REQUIRE(mqtt_serialize_publish(&m, big.data(), big.size(), &n));
+        const size_t rem = 2 + 1 + payload; // 16383, 16384, 2097151, 2097152
+        const size_t rl_bytes = rem <= 127 ? 1 : rem <= 16383 ? 2 : rem <= 2097151 ? 3 : 4;
+        CHECK_EQ(n, 1 + rl_bytes + rem);
+        size_t back = 0;
+        CHECK_EQ(mqtt_decode_remaining_length(&big[1], 4, &back), rl_bytes);
+        CHECK_EQ(back, rem);
+    }
+    // 符号化できる最大値を超える長さでも、書き込むのは 4 バイトまで
+    uint8_t d[8];
+    std::memset(d, 0x55, sizeof(d));
+    CHECK_EQ(mqtt_encode_remaining_length(268435456, d), 4u);
+    CHECK_EQ(d[4], 0x55);
+}
+
+TEST_CASE(null_and_empty_arguments_are_rejected) {
+    uint8_t buf[16] = {0x20, 0x02, 0x00, 0x00, 0x00};
+    mqtt_packet_type_t t;
+    size_t total = 0;
+    CHECK_EQ(mqtt_peek_packet_info(buf, 4, nullptr, &total), MQTT_ERR_INCOMPLETE_PACKET);
+    CHECK_EQ(mqtt_peek_packet_info(buf, 4, &t, nullptr), MQTT_ERR_INCOMPLETE_PACKET);
+    CHECK_EQ(mqtt_peek_packet_info(buf, 1, &t, &total), MQTT_ERR_INCOMPLETE_PACKET);
+    const uint8_t ping[] = {0xC0, 0x00};
+    CHECK_EQ(mqtt_peek_packet_info(ping, 2, &t, &total), MQTT_OK);
+
+    bool sp = false;
+    mqtt_connack_rc_t rc;
+    CHECK_EQ(mqtt_deserialize_connack(buf, 4, nullptr, &rc), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_connack(buf, 4, &sp, nullptr), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_connack(buf, 4, &sp, &rc), MQTT_OK);
+
+    uint8_t ack[5] = {0x90, 0x03, 0x00, 0x01, 0x00};
+    uint16_t id = 0;
+    mqtt_qos_t q;
+    CHECK_EQ(mqtt_deserialize_suback(ack, 5, nullptr, &q), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_suback(ack, 5, &id, nullptr), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_suback(nullptr, 5, &id, &q), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_suback(ack, 4, &id, &q), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_suback(ack, 5, &id, &q), MQTT_OK);
+    uint8_t pa[4] = {0x40, 0x02, 0x00, 0x01};
+    CHECK_EQ(mqtt_deserialize_puback(pa, 4, nullptr), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_puback(pa, 3, &id), MQTT_ERR_INVALID_PARAM);
+    uint8_t ua[4] = {0xB0, 0x02, 0x00, 0x01};
+    CHECK_EQ(mqtt_deserialize_unsuback(ua, 4, nullptr), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_unsuback(ua, 3, &id), MQTT_ERR_INVALID_PARAM);
+    CHECK_EQ(mqtt_deserialize_unsuback(ua, 4, &id), MQTT_OK);
+
+    size_t n = 0;
+    CHECK(!mqtt_serialize_subscribe(1, "t", MQTT_QOS_0, nullptr, 64, &n));
+    CHECK(!mqtt_serialize_subscribe(1, "t", MQTT_QOS_0, buf, 16, nullptr));
+    CHECK(!mqtt_serialize_unsubscribe(1, "t", nullptr, 64, &n));
+    CHECK(!mqtt_serialize_unsubscribe(1, "t", buf, 16, nullptr));
+    CHECK(!mqtt_serialize_connect(nullptr, buf, 16, &n));
+
+    // クライアント API: クライアント / トピック / 送信関数のどれが欠けても拒否
+    Client k;
+    k.connect_ok();
+    CHECK(!mqtt_client_subscribe(nullptr, "t", MQTT_QOS_0));
+    CHECK(!mqtt_client_unsubscribe(nullptr, "t"));
+    CHECK(!mqtt_client_ping(nullptr));
+    CHECK(!mqtt_client_disconnect(nullptr));
+    mqtt_client_t nosend = k.c;
+    nosend.send_fn = nullptr;
+    CHECK(!mqtt_client_subscribe(&nosend, "t", MQTT_QOS_0));
+    CHECK(!mqtt_client_unsubscribe(&nosend, "t"));
+    CHECK(!mqtt_client_ping(&nosend));
+    CHECK(!mqtt_client_disconnect(&nosend));
+    CHECK(!mqtt_client_publish(&nosend, "t", "x", 1, MQTT_QOS_0, false));
+    CHECK(!mqtt_client_publish(&k.c, nullptr, "x", 1, MQTT_QOS_0, false));
+    CHECK(!mqtt_client_publish(nullptr, "t", "x", 1, MQTT_QOS_0, false));
+    CHECK(k.wire.sent.empty());
+
+    // トピックのマッチ: どちらかが空なら一致しない
+    CHECK(!mqtt_topic_match("", "a"));
+    CHECK(!mqtt_topic_match("a", ""));
+    CHECK(!mqtt_topic_match("#", ""));
+    CHECK(!mqtt_topic_match(nullptr, "a"));
+    CHECK(!mqtt_topic_match("a", nullptr));
+}
+
+TEST_CASE(client_receive_buffer_edge_cases) {
+    Client k;
+    k.connect_ok();
+    // ちょうど最大パケットサイズ (1024 バイト) のメッセージは受け取れる
+    Bytes pkt = {0x30, 0x80 | (1021 & 0x7F), uint8_t(1021 >> 7), 0x00, 0x01, 't'};
+    pkt.resize(1024, 'p');
+    CHECK_EQ(pkt.size(), (size_t)MQTT_MAX_PACKET_SIZE);
+    k.feed(pkt);
+    REQUIRE(k.wire.topics.size() == 1u);
+    CHECK_EQ(k.wire.payloads[0].size(), 1018u);
+    CHECK_EQ(k.c.rx_len, 0u);
+
+    // 2 バイトだけのパケット (PINGRESP) も単独で消費される
+    k.feed({0xD0, 0x00});
+    CHECK_EQ(k.c.rx_len, 0u);
+    // 1 バイトでは何も起きず、残りが届くまで保持する
+    k.feed({0xD0});
+    CHECK_EQ(k.c.rx_len, 1u);
+    k.feed({0x00});
+    CHECK_EQ(k.c.rx_len, 0u);
+}
+
+TEST_CASE(client_with_keep_alive_zero_never_pings) {
+    Client k;
+    k.connect_ok();
+    k.c.keep_alive_sec = 0; // Keep Alive 無効
+    mqtt_client_yield(&k.c, 0);
+    mqtt_client_yield(&k.c, 100000);
+    CHECK(k.wire.sent.empty());
 }
 
 EMBED_TEST_MAIN()
