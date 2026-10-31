@@ -109,26 +109,56 @@ uint32_t opcua_server_process_read(const opcua_server_t *server, const opcua_nod
         return OPCUA_STATUS_BAD_NODE_ID_UNKNOWN;
     }
 
-    if (!(node->access_level & 0x01)) {
-        out_value->status = OPCUA_STATUS_BAD_NOT_READABLE;
-        return OPCUA_STATUS_BAD_NOT_READABLE;
-    }
-
     switch (attr_id) {
     case OPCUA_ATTR_VALUE:
+        /* AccessLevel (読み取り権限) が制限するのは Value 属性だけ */
+        if (!(node->access_level & 0x01)) {
+            out_value->status = OPCUA_STATUS_BAD_NOT_READABLE;
+            return OPCUA_STATUS_BAD_NOT_READABLE;
+        }
         *out_value = node->value;
         return OPCUA_STATUS_GOOD;
 
     case OPCUA_ATTR_NODE_ID:
-        out_value->value.type = OPCUA_TYPE_UINT32;
-        out_value->value.value.uint32_val = node->node_id.id.numeric;
+        memset(out_value, 0, sizeof(*out_value));
+        if (node->node_id.id_type == OPCUA_NODEID_NUMERIC) {
+            out_value->value.type = OPCUA_TYPE_UINT32;
+            out_value->value.value.uint32_val = node->node_id.id.numeric;
+        } else {
+            /* NodeId 型の Variant は扱えないので、文字列の識別子をそのまま返す */
+            out_value->value.type = OPCUA_TYPE_STRING;
+            snprintf(out_value->value.value.string_val, sizeof(out_value->value.value.string_val),
+                     "%s", node->node_id.id.string);
+        }
+        out_value->status = OPCUA_STATUS_GOOD;
+        return OPCUA_STATUS_GOOD;
+
+    case OPCUA_ATTR_NODE_CLASS:
+        memset(out_value, 0, sizeof(*out_value));
+        out_value->value.type = OPCUA_TYPE_INT32;
+        out_value->value.value.int32_val = (int32_t)node->node_class;
         out_value->status = OPCUA_STATUS_GOOD;
         return OPCUA_STATUS_GOOD;
 
     case OPCUA_ATTR_DISPLAY_NAME:
+        memset(out_value, 0, sizeof(*out_value));
         out_value->value.type = OPCUA_TYPE_STRING;
         snprintf(out_value->value.value.string_val, sizeof(out_value->value.value.string_val), "%s",
                  node->display_name.text);
+        out_value->status = OPCUA_STATUS_GOOD;
+        return OPCUA_STATUS_GOOD;
+
+    case OPCUA_ATTR_VALUE_RANK:
+        memset(out_value, 0, sizeof(*out_value));
+        out_value->value.type = OPCUA_TYPE_INT32;
+        out_value->value.value.int32_val = -1; /* スカラ (-1) */
+        out_value->status = OPCUA_STATUS_GOOD;
+        return OPCUA_STATUS_GOOD;
+
+    case OPCUA_ATTR_ACCESS_LEVEL:
+        memset(out_value, 0, sizeof(*out_value));
+        out_value->value.type = OPCUA_TYPE_BYTE;
+        out_value->value.value.byte_val = node->access_level;
         out_value->status = OPCUA_STATUS_GOOD;
         return OPCUA_STATUS_GOOD;
 
@@ -149,12 +179,30 @@ uint32_t opcua_server_process_write(opcua_server_t *server, const opcua_nodeid_t
         return OPCUA_STATUS_BAD_NODE_ID_UNKNOWN;
     }
 
+    if (attr_id != OPCUA_ATTR_VALUE) {
+        /* Value 以外の既知の属性は読み取り専用、未知の属性 ID は不正 */
+        switch (attr_id) {
+        case OPCUA_ATTR_NODE_ID:
+        case OPCUA_ATTR_NODE_CLASS:
+        case OPCUA_ATTR_BROWSE_NAME:
+        case OPCUA_ATTR_DISPLAY_NAME:
+        case OPCUA_ATTR_DESCRIPTION:
+        case OPCUA_ATTR_DATA_TYPE:
+        case OPCUA_ATTR_VALUE_RANK:
+        case OPCUA_ATTR_ACCESS_LEVEL:
+            return OPCUA_STATUS_BAD_NOT_WRITABLE;
+        default:
+            return OPCUA_STATUS_BAD_ATTRIBUTE_ID_INVALID;
+        }
+    }
+
     if (!(node->access_level & 0x02)) {
         return OPCUA_STATUS_BAD_NOT_WRITABLE;
     }
 
-    if (attr_id != OPCUA_ATTR_VALUE) {
-        return OPCUA_STATUS_BAD_ATTRIBUTE_ID_INVALID;
+    /* データ型が決まっているノードには、同じ型の値しか書けない (型の決まっていない NULL は最初の書き込みで決まる) */
+    if (node->value.value.type != OPCUA_TYPE_NULL && in_value->value.type != node->value.value.type) {
+        return OPCUA_STATUS_BAD_TYPE_MISMATCH;
     }
 
     node->value = *in_value;
