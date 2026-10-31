@@ -1093,4 +1093,25 @@ TEST_CASE(empty_string_nodeid_needs_exactly_seven_bytes) {
     CHECK_EQ(opcua_encode_nodeid(&e, b, 6), 0u);
 }
 
+TEST_CASE(numeric_nodeid_failure_does_not_write_partial_output) {
+    // 容量が足りないときは、先頭の数バイトも書かない
+    struct Case {
+        opcua_nodeid_t id;
+        size_t need;
+    };
+    const Case cases[] = {{num_id(0, 7), 2},   {num_id(0, 255), 2}, {num_id(0, 256), 4},
+                          {num_id(1, 1), 4},   {num_id(255, 65535), 4}, {num_id(256, 1), 7},
+                          {num_id(0, 65536), 7}};
+    for (const Case &c : cases) {
+        for (size_t cap = 1; cap < c.need; ++cap) {
+            uint8_t b[16];
+            std::memset(b, 0xEE, sizeof(b));
+            CHECK_EQ(opcua_encode_nodeid(&c.id, b, cap), 0u);
+            for (uint8_t x : b) CHECK_EQ(x, 0xEE);
+        }
+        uint8_t b[16];
+        CHECK_EQ(opcua_encode_nodeid(&c.id, b, c.need), c.need);
+    }
+}
+
 EMBED_TEST_MAIN()

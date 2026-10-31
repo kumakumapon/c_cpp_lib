@@ -39,16 +39,12 @@ size_t opcua_encode_u64(uint64_t val, uint8_t *dst, size_t cap) {
 }
 
 size_t opcua_encode_float(float val, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 4)
-        return 0;
     uint32_t u;
     memcpy(&u, &val, sizeof(float));
     return opcua_encode_u32(u, dst, cap);
 }
 
 size_t opcua_encode_double(double val, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 8)
-        return 0;
     uint64_t u;
     memcpy(&u, &val, sizeof(double));
     return opcua_encode_u64(u, dst, cap);
@@ -411,8 +407,6 @@ size_t opcua_decode_u64(const uint8_t *src, size_t len, uint64_t *val) {
 }
 
 size_t opcua_decode_float(const uint8_t *src, size_t len, float *val) {
-    if (!src || len < 4)
-        return 0;
     uint32_t u;
     size_t off = opcua_decode_u32(src, len, &u);
     if (!off || !val)
@@ -422,8 +416,6 @@ size_t opcua_decode_float(const uint8_t *src, size_t len, float *val) {
 }
 
 size_t opcua_decode_double(const uint8_t *src, size_t len, double *val) {
-    if (!src || len < 8)
-        return 0;
     uint64_t u;
     size_t off = opcua_decode_u64(src, len, &u);
     if (!off || !val)
@@ -433,9 +425,7 @@ size_t opcua_decode_double(const uint8_t *src, size_t len, double *val) {
 }
 
 size_t opcua_decode_string(const uint8_t *src, size_t src_len, char *dst, size_t max_dst_len) {
-    if (!src || src_len < 4)
-        return 0;
-    if (!src || !dst || max_dst_len == 0)
+    if (!src || !dst || src_len < 4 || max_dst_len == 0)
         return 0;
     uint32_t len = 0;
     size_t off = opcua_decode_u32(src, src_len, &len);
