@@ -1,1 +1,50 @@
-[]
+[
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (fabsf(sinp) >= 1.0f) {",
+    "change": ">= -> >",
+    "reason": "sinp == 1 のとき asin(1) = π/2 でクランプ値と同じ"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "while (j >= 0 && sorted[j] > key) {",
+    "change": "> -> >=",
+    "reason": "等しい要素を入れ替えるだけで、ソート結果(値の並び)は変わらない"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (alpha < 0.0f) alpha = 0.0f;",
+    "change": "< -> <=",
+    "reason": "alpha == 0 のとき 0 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (alpha > 1.0f) alpha = 1.0f;",
+    "change": "> -> >=",
+    "reason": "alpha == 1 のとき 1 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (window_size < 3) window_size = 3;",
+    "change": "< -> <=",
+    "reason": "window_size == 3 のとき 3 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (window_size > FILTER_MEDIAN_MAX_WINDOW) window_size = FILTER_MEDIAN_MAX_WINDOW;",
+    "change": "> -> >=",
+    "reason": "window_size == 最大のとき最大を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (norm_q > EPSILON) {",
+    "change": "> -> >=",
+    "reason": "更新後のクォータニオンのノルムは約 1 で、ちょうど EPSILON になる入力は作れない"
+  },
+  {
+    "file": "libs/embed_filter/src/embed_filter.c",
+    "line": "if (norm_s > EPSILON) {",
+    "change": "> -> >=",
+    "reason": "勾配のノルムがちょうど EPSILON になる入力は現実的に作れない"
+  }
+]

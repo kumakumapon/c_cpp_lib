@@ -25,9 +25,9 @@
     "valid": 80
   },
   "embed_filter": {
-    "rate": 0.4156,
-    "killed": 32,
-    "valid": 77
+    "rate": 1.0,
+    "killed": 69,
+    "valid": 69
   },
   "embed_fixed": {
     "rate": 0.55,
