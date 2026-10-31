@@ -85,9 +85,9 @@
     "valid": 71
   },
   "embed_pid": {
-    "rate": 0.325,
-    "killed": 13,
-    "valid": 40
+    "rate": 1.0,
+    "killed": 33,
+    "valid": 33
   },
   "embed_ringbuf": {
     "rate": 0.4722,
