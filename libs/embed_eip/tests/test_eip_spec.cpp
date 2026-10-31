@@ -216,8 +216,8 @@ TEST_CASE(send_rr_data_bytes_and_limits) {
     CHECK_EQ(eip_build_send_rr_data(1, kCtx, cip.data(), 6, nullptr, sizeof(buf)), 0u);
     // ヘッダの長さは 16 ビット: 収まらない CIP データは作らない
     std::vector<uint8_t> big(70000, 0x11), dst(80000);
-    CHECK_EQ(eip_build_send_rr_data(1, kCtx, big.data(), 65520, dst.data(), dst.size()), 24u + 16 + 65520);
-    CHECK_EQ(eip_build_send_rr_data(1, kCtx, big.data(), 65521, dst.data(), dst.size()), 0u);
+    CHECK_EQ(eip_build_send_rr_data(1, kCtx, big.data(), 65519, dst.data(), dst.size()), 24u + 16 + 65519);
+    CHECK_EQ(eip_build_send_rr_data(1, kCtx, big.data(), 65520, dst.data(), dst.size()), 0u);
 }
 
 TEST_CASE(parse_send_rr_data_items) {
@@ -651,4 +651,15 @@ TEST_CASE(responses_echo_session_and_context_and_fit_the_buffer) {
     CHECK_EQ(process(d.a, req, resp.size()).size(), resp.size());
     CHECK_EQ(process(d.a, req, resp.size() - 1).size(), 0u);
 }
+TEST_CASE(output_buffer_smaller_than_a_header_is_never_written) {
+    Dev d;
+    uint8_t small[64];
+    std::memset(small, 0xEE, sizeof(small));
+    const Bytes bad = encap(0x1234, d.session, {}); // 未実装のコマンドは、ヘッダだけのエラー応答になる
+    CHECK_EQ(eip_adapter_process_packet(&d.a, bad.data(), bad.size(), small, 23), 0u);
+    CHECK_EQ(small[0], 0xEE);
+    CHECK_EQ(eip_adapter_process_packet(&d.a, bad.data(), bad.size(), small, 24), 24u);
+    CHECK_EQ(small[24], 0xEE);
+}
+
 EMBED_TEST_MAIN()
