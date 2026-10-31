@@ -46,5 +46,53 @@
     "line": "if (norm_s > EPSILON) {",
     "change": "> -> >=",
     "reason": "勾配のノルムがちょうど EPSILON になる入力は現実的に作れない"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (!fmt || offset >= cap - 1)",
+    "change": "|| -> &&",
+    "reason": "append の fmt は常に非 NULL(公開関数 embed_log_write_va が先に弾く)で、NULL 側は到達しない"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (!fmt || offset >= cap - 1)",
+    "change": ">= -> >",
+    "reason": "offset == cap - 1 でも vsnprintf のサイズが 1 になるだけで、結果の offset は変わらない"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (!fmt || offset >= cap - 1)",
+    "change": "- -> +",
+    "reason": "offset は cap - 1 を超えないので、cap + 1 との比較は結果に影響しない"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (n < 0) {",
+    "change": "< -> <=",
+    "reason": "n == 0 のときも offset は変わらず、終端 NUL を書くだけで結果は同じ"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (offset < (int)sizeof(line_buf) - 1) {",
+    "change": "< -> <=",
+    "reason": "hexdump 1 行は最大 76 文字で、128 バイトのバッファの境界には到達しない"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (offset < (int)sizeof(line_buf) - 1) {",
+    "change": "- -> +",
+    "reason": "同上(境界に到達しない)"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (offset < (int)sizeof(line_buf) - 2) {",
+    "change": "< -> <=",
+    "reason": "同上(境界に到達しない)"
+  },
+  {
+    "file": "libs/embed_log/src/embed_log.c",
+    "line": "if (offset < (int)sizeof(line_buf) - 2) {",
+    "change": "- -> +",
+    "reason": "同上(境界に到達しない)"
   }
 ]
