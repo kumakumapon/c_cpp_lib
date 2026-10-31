@@ -148,8 +148,8 @@ def run(cmd: list[str], cwd: Path, timeout: int | None = None) -> subprocess.Com
 
 
 def snapshot(dest: Path) -> None:
-    """git 管理下のファイルだけを dest にコピーする (build 成果物や未追跡ファイルは持ち込まない)。"""
-    files = run(["git", "ls-files"], ROOT).stdout.splitlines()
+    """git 管理下と、未追跡だが .gitignore の対象でないファイルを dest にコピーする (build 成果物は持ち込まない)。"""
+    files = run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], ROOT).stdout.splitlines()
     for f in files:
         src = ROOT / f
         if src.is_file():

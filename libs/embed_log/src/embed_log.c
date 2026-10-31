@@ -179,14 +179,16 @@ void embed_log_write_va(embed_log_level_t level, const char *tag, const char *fi
     char buffer[EMBED_LOG_MAX_LINE_LENGTH] = {0};
     logger_enter_critical();
     uint32_t ts = s_logger.time_fn ? s_logger.time_fn() : 0;
-    size_t offset = append(buffer, sizeof(buffer), 0, "%s[%08u][%s][%s] ",
+    /* 長い行を切り詰めても、末尾の色リセットと改行は必ず残す。本体はその分を除いた容量に収める */
+    const char *suffix = s_logger.color_enabled ? ANSI_COLOR_RESET : "";
+    const size_t body_cap = sizeof(buffer) - (strlen(suffix) + 1);
+    size_t offset = append(buffer, body_cap, 0, "%s[%08u][%s][%s] ",
                            s_logger.color_enabled ? level_to_color(level) : "", (unsigned)ts,
                            level_to_str(level), tag ? tag : "SYS");
-    offset = append_va(buffer, sizeof(buffer), offset, fmt, args);
+    offset = append_va(buffer, body_cap, offset, fmt, args);
     if (level >= EMBED_LOG_LEVEL_DEBUG)
-        offset = append(buffer, sizeof(buffer), offset, " (%s:%d)", get_filename_only(file), line);
-    offset = append(buffer, sizeof(buffer), offset, "%s\n",
-                    s_logger.color_enabled ? ANSI_COLOR_RESET : "");
+        offset = append(buffer, body_cap, offset, " (%s:%d)", get_filename_only(file), line);
+    offset = append(buffer, sizeof(buffer), offset, "%s\n", suffix);
     dispatch_to_backends(buffer, offset);
     logger_exit_critical();
 }

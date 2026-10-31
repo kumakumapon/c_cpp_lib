@@ -25,9 +25,9 @@
     "valid": 80
   },
   "embed_filter": {
-    "rate": 0.4156,
-    "killed": 32,
-    "valid": 77
+    "rate": 1.0,
+    "killed": 69,
+    "valid": 69
   },
   "embed_fixed": {
     "rate": 0.55,
@@ -50,9 +50,9 @@
     "valid": 63
   },
   "embed_log": {
-    "rate": 0.3725,
-    "killed": 19,
-    "valid": 51
+    "rate": 1.0,
+    "killed": 45,
+    "valid": 45
   },
   "embed_modbus": {
     "rate": 0.85,
@@ -80,9 +80,9 @@
     "valid": 80
   },
   "embed_path": {
-    "rate": 0.2625,
-    "killed": 21,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 71,
+    "valid": 71
   },
   "embed_pid": {
     "rate": 0.325,
