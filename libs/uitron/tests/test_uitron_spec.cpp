@@ -954,4 +954,311 @@ TEST_CASE(terminate_and_delete_reset_task_state) {
     CHECK_EQ(rt(1).tskbpri, 4);
 }
 
+// ---- 上限 ID・待ち状態の組み合わせ・待ち行列の境界 ----
+TEST_CASE(ids_at_the_upper_limit_are_valid) {
+    fresh();
+    T_CTSK t{};
+    t.itskpri = 1;
+    t.task = nop;
+    CHECK_EQ(cre_tsk(0, &t), E_ID); // 0 は ID として使えない
+    mk(kMaxTsk, 1);
+    mk_sem(kMaxSem, 1, 2);
+    mk_flg(kMaxFlg);
+    mk_mbx(kMaxMbx);
+    mk_mpf(kMaxMpf, 2, 16);
+
+    T_RSEM rs;
+    CHECK_EQ(pol_sem(kMaxSem), E_OK);
+    CHECK_EQ(sig_sem(kMaxSem), E_OK);
+    CHECK_EQ(isig_sem(kMaxSem), E_OK);
+    CHECK_EQ(ref_sem(kMaxSem, &rs), E_OK);
+    CHECK_EQ(rs.semcnt, 2u);
+
+    T_RFLG rf;
+    UINT p = 0;
+    CHECK_EQ(set_flg(kMaxFlg, 3), E_OK);
+    CHECK_EQ(iset_flg(kMaxFlg, 4), E_OK);
+    CHECK_EQ(pol_flg(kMaxFlg, 7, TWF_ANDW, &p), E_OK);
+    CHECK_EQ(clr_flg(kMaxFlg, 1), E_OK);
+    CHECK_EQ(ref_flg(kMaxFlg, &rf), E_OK);
+    CHECK_EQ(rf.flgptn, 1u);
+
+    T_MSG m, *got = nullptr;
+    T_RMBX rm;
+    CHECK_EQ(snd_mbx(kMaxMbx, &m), E_OK);
+    CHECK_EQ(ref_mbx(kMaxMbx, &rm), E_OK);
+    CHECK(rm.pk_msg == &m);
+    CHECK_EQ(prcv_mbx(kMaxMbx, &got), E_OK);
+    CHECK_EQ(isnd_mbx(kMaxMbx, &m), E_OK);
+    CHECK_EQ(trcv_mbx(kMaxMbx, &got, 1), E_OK);
+
+    VP b1 = nullptr, b2 = nullptr;
+    T_RMPF rp;
+    CHECK_EQ(pget_mpf(kMaxMpf, &b1), E_OK);
+    CHECK_EQ(tget_mpf(kMaxMpf, &b2, 1), E_OK);
+    CHECK_EQ(ref_mpf(kMaxMpf, &rp), E_OK);
+    CHECK_EQ(rp.fblkcnt, 0u);
+    CHECK_EQ(rel_mpf(kMaxMpf, b1), E_OK);
+    CHECK_EQ(rel_mpf(kMaxMpf, b2), E_OK);
+
+    PRI pri = 0;
+    T_RTSK rtk;
+    CHECK_EQ(ref_tsk(kMaxTsk, &rtk), E_OK);
+    CHECK_EQ(get_pri(kMaxTsk, &pri), E_OK);
+    CHECK_EQ(chg_pri(kMaxTsk, 2), E_OK);
+    CHECK_EQ(sus_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(rsm_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(wup_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(can_wup(kMaxTsk), 1);
+    CHECK_EQ(act_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(can_act(kMaxTsk), 1);
+    CHECK_EQ(iact_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(can_act(kMaxTsk), 1); // 起動要求を取り消さないと、終了後に再起動する
+    CHECK_EQ(iwup_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(rel_wai(kMaxTsk), E_OBJ); // 待ち状態でない
+    CHECK_EQ(ter_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(del_tsk(kMaxTsk), E_OK);
+    CHECK_EQ(del_sem(kMaxSem), E_OK);
+    CHECK_EQ(del_flg(kMaxFlg), E_OK);
+    CHECK_EQ(del_mbx(kMaxMbx), E_OK);
+    CHECK_EQ(del_mpf(kMaxMpf), E_OK);
+}
+
+namespace {
+// 4 種類の待ちオブジェクトを同じ手順で扱うための表 (ID は常に 1)
+UINT g_ptn;
+T_MSG *g_pm;
+T_MSG g_msg;
+VP g_held, g_blk;
+
+struct Obj {
+    const char *name;
+    void (*make)();
+    ER (*block)(TMO);
+    ER (*release)();
+    ER (*del)();
+};
+const Obj kObjs[] = {
+    {"sem", [] { mk_sem(1, 0, 1); }, [](TMO t) { return twai_sem(1, t); }, [] { return sig_sem(1); },
+     [] { return del_sem(1); }},
+    {"flg", [] { mk_flg(1); }, [](TMO t) { return twai_flg(1, 1, TWF_ORW, &g_ptn, t); },
+     [] { return set_flg(1, 1); }, [] { return del_flg(1); }},
+    {"mbx", [] { mk_mbx(1); }, [](TMO t) { return trcv_mbx(1, &g_pm, t); },
+     [] { return snd_mbx(1, &g_msg); }, [] { return del_mbx(1); }},
+    {"mpf", [] { mk_mpf(1, 1, 8); pget_mpf(1, &g_held); }, [](TMO t) { return tget_mpf(1, &g_blk, t); },
+     [] { return rel_mpf(1, g_held); }, [] { return del_mpf(1); }},
+};
+} // namespace
+
+TEST_CASE(every_wait_ends_correctly_in_plain_and_suspended_states) {
+    for (const Obj &o : kObjs) {
+        for (ID id : {ID(1), kMaxTsk}) { // 最小 ID と最大 ID のタスク
+            for (bool suspended : {false, true}) {
+                const STAT after = suspended ? TTS_SUS : TTS_RUN;
+                auto setup = [&](TMO tmo) {
+                    fresh();
+                    mk(id, 1);
+                    o.make();
+                    CHECK_EQ(o.block(tmo), E_WBLK);
+                    CHECK_EQ(rt(id).tskstat, TTS_WAI);
+                    if (suspended) {
+                        CHECK_EQ(sus_tsk(id), E_OK);
+                        CHECK_EQ(rt(id).tskstat, TTS_WAS);
+                    }
+                    CHECK_EQ(uitron_wait_result(id), E_WBLK);
+                };
+                // 資源が届いて待ちが解ける
+                setup(TMO_FEVR);
+                CHECK_EQ(o.release(), E_OK);
+                CHECK_EQ(uitron_wait_result(id), E_OK);
+                CHECK_EQ(rt(id).tskstat, after);
+                CHECK_EQ(rt(id).tskwait, 0u);
+                CHECK_EQ(rt(id).wid, 0);
+                // タイムアウト
+                setup(3);
+                uitron_os_tick(2);
+                CHECK_EQ(uitron_wait_result(id), E_WBLK);
+                uitron_os_tick(1);
+                CHECK_EQ(uitron_wait_result(id), E_TMOUT);
+                CHECK_EQ(rt(id).tskstat, after);
+                // オブジェクトの削除
+                setup(TMO_FEVR);
+                CHECK_EQ(o.del(), E_OK);
+                CHECK_EQ(uitron_wait_result(id), E_DLT);
+                CHECK_EQ(rt(id).tskstat, after);
+                // 強制解除
+                setup(TMO_FEVR);
+                CHECK_EQ(rel_wai(id), E_OK);
+                CHECK_EQ(uitron_wait_result(id), E_RLWAI);
+                CHECK_EQ(rt(id).tskstat, after);
+            }
+        }
+    }
+}
+
+TEST_CASE(deleting_an_object_releases_only_its_own_waiters) {
+    fresh();
+    for (ID id = 1; id <= 5; ++id) mk(id, id);
+    mk_sem(1, 0, 1);
+    mk_sem(2, 0, 1);
+    mk_flg(1);
+    mk_mbx(1);
+    mk_mpf(1, 1, 8);
+    VP held = nullptr;
+    pget_mpf(1, &held);
+    UINT p = 0;
+    T_MSG *pm = nullptr;
+    VP blk = nullptr;
+    CHECK_EQ(wai_sem(1), E_WBLK);                           // タスク 1: セマフォ 1
+    CHECK_EQ(wai_flg(1, 1, TWF_ORW, &p), E_WBLK);           // タスク 2: フラグ 1
+    CHECK_EQ(rcv_mbx(1, &pm), E_WBLK);                      // タスク 3: メールボックス 1
+    CHECK_EQ(get_mpf(1, &blk), E_WBLK);                     // タスク 4: メモリプール 1
+    CHECK_EQ(wai_sem(2), E_WBLK);                           // タスク 5: セマフォ 2
+    // 同じ ID 番号でも、種類と番号が違う待ちは巻き込まれない
+    CHECK_EQ(del_sem(1), E_OK);
+    CHECK_EQ(uitron_wait_result(1), E_DLT);
+    for (ID id = 2; id <= 5; ++id) CHECK_EQ(rt(id).tskstat, TTS_WAI);
+    CHECK_EQ(del_flg(1), E_OK);
+    CHECK_EQ(uitron_wait_result(2), E_DLT);
+    for (ID id = 3; id <= 5; ++id) CHECK_EQ(rt(id).tskstat, TTS_WAI);
+    CHECK_EQ(del_mbx(1), E_OK);
+    CHECK_EQ(uitron_wait_result(3), E_DLT);
+    for (ID id = 4; id <= 5; ++id) CHECK_EQ(rt(id).tskstat, TTS_WAI);
+    CHECK_EQ(del_mpf(1), E_OK);
+    CHECK_EQ(uitron_wait_result(4), E_DLT);
+    CHECK_EQ(rt(5).tskstat, TTS_WAI);
+    CHECK_EQ(rt(5).wid, 2);
+    CHECK_EQ(del_sem(2), E_OK);
+    CHECK_EQ(uitron_wait_result(5), E_DLT);
+}
+
+TEST_CASE(a_signal_reaches_only_its_own_object_and_type) {
+    fresh();
+    mk(1, 1);
+    mk(2, 2);
+    mk_sem(1, 0, 1);
+    mk_flg(1);
+    UINT p = 0;
+    CHECK_EQ(wai_sem(1), E_WBLK);                  // タスク 1: セマフォ 1
+    CHECK_EQ(wai_flg(1, 1, TWF_ORW, &p), E_WBLK);  // タスク 2: フラグ 1
+    CHECK_EQ(set_flg(1, 1), E_OK);                 // フラグだけが動く
+    CHECK_EQ(rt(1).tskstat, TTS_WAI);
+    CHECK(rt(2).tskstat != TTS_WAI);
+    CHECK_EQ(sig_sem(1), E_OK);
+    CHECK(rt(1).tskstat != TTS_WAI);
+}
+
+TEST_CASE(scheduler_picks_the_first_of_equal_priorities_and_demotes_the_preempted_task) {
+    fresh();
+    mk(1, UITRON_MAX_PRI); // 最低の優先度でも実行される
+    CHECK_EQ(uitron_os_get_current_task(), 1);
+    CHECK_EQ(rt(1).tskstat, TTS_RUN);
+    mk(2, UITRON_MAX_PRI); // 同じ優先度は先のタスクが走り続ける
+    CHECK_EQ(uitron_os_get_current_task(), 1);
+    CHECK_EQ(rt(2).tskstat, TTS_RDY);
+    mk(3, 3);              // 高優先度が入ると実行状態を奪い、元のタスクは実行可能に戻る
+    CHECK_EQ(uitron_os_get_current_task(), 3);
+    CHECK_EQ(rt(3).tskstat, TTS_RUN);
+    CHECK_EQ(rt(1).tskstat, TTS_RDY);
+    CHECK_EQ(rt(2).tskstat, TTS_RDY);
+    mk(4, 3);
+    CHECK_EQ(uitron_os_get_current_task(), 3);
+    CHECK_EQ(rt(4).tskstat, TTS_RDY);
+    int running = 0;
+    for (ID id = 1; id <= 4; ++id) running += rt(id).tskstat == TTS_RUN;
+    CHECK_EQ(running, 1);
+}
+
+TEST_CASE(priority_queue_ties_are_broken_by_arrival_order) {
+    fresh();
+    mk(1, 1);
+    mk(2, 2);
+    mk(3, 3);
+    mk_sem(1, 0, 3, TA_TPRI);
+    CHECK_EQ(wai_sem(1), E_WBLK); // 到着順 1, 2, 3
+    CHECK_EQ(wai_sem(1), E_WBLK);
+    CHECK_EQ(wai_sem(1), E_WBLK);
+    for (ID id = 1; id <= 3; ++id) CHECK_EQ(chg_pri(id, 5), E_OK); // 全員同じ優先度
+    T_RSEM rs;
+    ref_sem(1, &rs);
+    CHECK_EQ(rs.wtskid, 1); // 同じ優先度は先着
+    CHECK_EQ(sig_sem(1), E_OK);
+    CHECK_EQ(uitron_wait_result(1), E_OK);
+    ref_sem(1, &rs);
+    CHECK_EQ(rs.wtskid, 2);
+}
+
+TEST_CASE(mailbox_and_pool_waiters_follow_their_queue_attribute) {
+    for (ATR atr : {(ATR)TA_TPRI, (ATR)TA_TFIFO}) {
+        const ID first = (atr == TA_TPRI) ? 3 : 1; // 優先度順なら 3、到着順なら 1
+        // メールボックス
+        fresh();
+        mk(1, 1);
+        mk(2, 2);
+        mk(3, 3);
+        mk_mbx(1, atr | TA_MFIFO);
+        T_MSG *r[4] = {nullptr, nullptr, nullptr, nullptr};
+        T_MSG m;
+        for (int i = 1; i <= 3; ++i) CHECK_EQ(rcv_mbx(1, &r[i]), E_WBLK);
+        CHECK_EQ(chg_pri(1, 5), E_OK);
+        CHECK_EQ(chg_pri(3, 1), E_OK);
+        T_RMBX rm;
+        ref_mbx(1, &rm);
+        CHECK_EQ(rm.wtskid, first);
+        CHECK_EQ(snd_mbx(1, &m), E_OK);
+        CHECK(r[first] == &m);
+        // メモリプール
+        fresh();
+        mk(1, 1);
+        mk(2, 2);
+        mk(3, 3);
+        mk_mpf(1, 1, 8, atr);
+        VP held = nullptr, w[4] = {nullptr, nullptr, nullptr, nullptr};
+        pget_mpf(1, &held);
+        for (int i = 1; i <= 3; ++i) CHECK_EQ(get_mpf(1, &w[i]), E_WBLK);
+        CHECK_EQ(chg_pri(1, 5), E_OK);
+        CHECK_EQ(chg_pri(3, 1), E_OK);
+        T_RMPF rp;
+        ref_mpf(1, &rp);
+        CHECK_EQ(rp.wtskid, first);
+        CHECK_EQ(rel_mpf(1, held), E_OK);
+        CHECK(w[first] == held);
+    }
+}
+
+TEST_CASE(wakeup_requests_queue_unless_the_task_is_sleeping) {
+    fresh();
+    mk(1, 1);
+    mk_sem(1, 0, 1);
+    CHECK_EQ(wai_sem(1), E_WBLK); // 資源待ちは起床待ちではない
+    CHECK_EQ(wup_tsk(1), E_OK);
+    CHECK_EQ(rt(1).tskstat, TTS_WAI);
+    CHECK_EQ(rt(1).wupcnt, 1u);
+    CHECK_EQ(sus_tsk(1), E_OK);
+    CHECK_EQ(wup_tsk(1), E_OK); // 二重待ち (資源待ち) でも同じ
+    CHECK_EQ(rt(1).tskstat, TTS_WAS);
+    CHECK_EQ(rt(1).wupcnt, 2u);
+}
+
+TEST_CASE(creation_edge_cases) {
+    fresh();
+    T_CMBX m{TA_MPRI, 1, nullptr}; // 最大優先度 1 でも作れる
+    CHECK_EQ(cre_mbx(1, &m), E_OK);
+    m = {TA_MPRI, -1, nullptr};
+    CHECK_EQ(cre_mbx(2, &m), E_PAR);
+    m = {TA_MFIFO, 0, nullptr}; // FIFO では最大優先度を見ない
+    CHECK_EQ(cre_mbx(2, &m), E_OK);
+
+    // エントリ関数のないタスクはステップ実行しても呼び出されない
+    T_CTSK t{};
+    t.tskatr = TA_HLNG | TA_ACT;
+    t.itskpri = 1;
+    t.task = nullptr;
+    CHECK_EQ(cre_tsk(1, &t), E_OK);
+    uitron_os_run_step();
+    CHECK_EQ(rt(1).tskstat, TTS_RUN);
+    uitron_os_shutdown();
+    uitron_os_run_step(); // タスクがなくても落ちない
+}
+
 EMBED_TEST_MAIN()
