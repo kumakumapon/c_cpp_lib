@@ -1,0 +1,117 @@
+{
+  "embed_bridge": {
+    "rate": 0.2763,
+    "killed": 21,
+    "valid": 76
+  },
+  "embed_canopen": {
+    "rate": 0.4828,
+    "killed": 28,
+    "valid": 58
+  },
+  "embed_crc": {
+    "rate": 0.8182,
+    "killed": 27,
+    "valid": 33
+  },
+  "embed_diag": {
+    "rate": 0.2903,
+    "killed": 9,
+    "valid": 31
+  },
+  "embed_eip": {
+    "rate": 0.2375,
+    "killed": 19,
+    "valid": 80
+  },
+  "embed_filter": {
+    "rate": 0.4156,
+    "killed": 32,
+    "valid": 77
+  },
+  "embed_fixed": {
+    "rate": 0.55,
+    "killed": 22,
+    "valid": 40
+  },
+  "embed_fsm": {
+    "rate": 0.4474,
+    "killed": 17,
+    "valid": 38
+  },
+  "embed_heap": {
+    "rate": 0.3375,
+    "killed": 27,
+    "valid": 80
+  },
+  "embed_kinematics": {
+    "rate": 0.4444,
+    "killed": 28,
+    "valid": 63
+  },
+  "embed_log": {
+    "rate": 0.3725,
+    "killed": 19,
+    "valid": 51
+  },
+  "embed_modbus": {
+    "rate": 0.85,
+    "killed": 68,
+    "valid": 80
+  },
+  "embed_modbus_tcp": {
+    "rate": 0.4783,
+    "killed": 33,
+    "valid": 69
+  },
+  "embed_motion": {
+    "rate": 0.7875,
+    "killed": 63,
+    "valid": 80
+  },
+  "embed_mqtt": {
+    "rate": 0.4375,
+    "killed": 35,
+    "valid": 80
+  },
+  "embed_opcua": {
+    "rate": 0.3375,
+    "killed": 27,
+    "valid": 80
+  },
+  "embed_path": {
+    "rate": 0.2625,
+    "killed": 21,
+    "valid": 80
+  },
+  "embed_pid": {
+    "rate": 0.325,
+    "killed": 13,
+    "valid": 40
+  },
+  "embed_ringbuf": {
+    "rate": 0.4722,
+    "killed": 17,
+    "valid": 36
+  },
+  "embed_sched": {
+    "rate": 0.4857,
+    "killed": 17,
+    "valid": 35
+  },
+  "embed_selftest": {
+    "rate": 0.6098,
+    "killed": 25,
+    "valid": 41
+  },
+  "uart_protocol": {
+    "rate": 0.4375,
+    "killed": 7,
+    "valid": 16
+  },
+  "uitron": {
+    "rate": 0.3375,
+    "killed": 27,
+    "valid": 80
+  }
+}

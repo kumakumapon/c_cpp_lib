@@ -1,0 +1,40 @@
+name: Mutation
+# 実行時間が長いので、夜間と手動実行だけにする。PR では動かさない。
+on:
+  workflow_dispatch:
+    inputs:
+      libs:
+        description: "対象ライブラリ (空白区切り)。空なら全ライブラリ"
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 18 * * *"
+permissions:
+  contents: read
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      libs: ${{ steps.libs.outputs.libs }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: libs
+        env:
+          INPUT_LIBS: ${{ inputs.libs }}
+        run: |
+          if [ -n "$INPUT_LIBS" ]; then
+            echo "libs=$(printf '%s\n' $INPUT_LIBS | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))')" >> "$GITHUB_OUTPUT"
+          else
+            echo "libs=$(python3 tools/mutation/mutate.py --list | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().split()))')" >> "$GITHUB_OUTPUT"
+          fi
+  mutation:
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        lib: ${{ fromJson(needs.list.outputs.libs) }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 tools/mutation/mutate.py ${{ matrix.lib }} --jobs 4 --config Release --check
