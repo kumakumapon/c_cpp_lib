@@ -80,9 +80,9 @@
     "valid": 80
   },
   "embed_path": {
-    "rate": 0.2625,
-    "killed": 21,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 71,
+    "valid": 71
   },
   "embed_pid": {
     "rate": 0.325,

@@ -94,5 +94,155 @@
     "line": "if (offset < (int)sizeof(line_buf) - 2) {",
     "change": "- -> +",
     "reason": "同上(境界に到達しない)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "float dy = (float)(y1 - y2);",
+    "change": "- -> +",
+    "reason": "経路は変わらず探索量だけが変わる(ゴールの f が他より大きく / 他の f が小さくなり、ゴールが最後に取り出されて全探索に近づくため、結果は最短のまま)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "nodes[ny][nx].f_score = tentative_g + heuristic(nx, ny, (int)goal_gx, (int)goal_gy);",
+    "change": "+ -> -",
+    "reason": "経路は変わらず探索量だけが変わる(ゴールの f が他より大きく / 他の f が小さくなり、ゴールが最後に取り出されて全探索に近づくため、結果は最短のまま)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (nodes[y][x].in_open && nodes[y][x].f_score < min_f) {",
+    "change": "< -> <=",
+    "reason": "f が同じノードのどちらを先に取り出しても最短コストは変わらない"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "int nx = cur_x + dx[i];",
+    "change": "+ -> -",
+    "reason": "近傍オフセットの符号を反転しても同じ 8 方向の集合で、探索順が変わるだけ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "int ny = cur_y + dy[i];",
+    "change": "+ -> -",
+    "reason": "同上"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (tentative_g < nodes[ny][nx].g_score) {",
+    "change": "< -> <=",
+    "reason": "同コストでの親の付け替えは、最短コストに影響しない"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "for (int i = 0; i < 8; ++i) {",
+    "change": "< -> <=",
+    "reason": "範囲外を読む未定義動作を起こす変異。通常のビルドでは出力が変わらない(ASan / UBSan のテストでは検出される)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (nx < 0 || nx >= (int)map->width || ny < 0 || ny >= (int)map->height) continue;",
+    "change": ">= -> >",
+    "reason": "範囲外を読む未定義動作を起こす変異。通常のビルドでは出力が変わらない(ASan / UBSan のテストでは検出される)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (nx < 0 || nx >= (int)map->width || ny < 0 || ny >= (int)map->height) continue;",
+    "change": "|| -> &&",
+    "reason": "範囲外を読む未定義動作を起こす変異。通常のビルドでは出力が変わらない(ASan / UBSan のテストでは検出される)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (start_gx >= map->width || start_gy >= map->height) return false;",
+    "change": ">= -> >",
+    "reason": "範囲外の始点は直後の path_grid_is_obstacle(範囲外は障害物) でも弾かれるので冗長"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (start_gx >= map->width || start_gy >= map->height) return false;",
+    "change": "|| -> &&",
+    "reason": "同上"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (goal_gx >= map->width || goal_gy >= map->height) return false;",
+    "change": ">= -> >",
+    "reason": "範囲外の終点は直後の path_grid_is_obstacle(範囲外は障害物) でも弾かれるので冗長"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "while (cx != -1 && cy != -1) {",
+    "change": "&& -> ||",
+    "reason": "parent_x と parent_y は常に同時に -1 になるので、どちらで判定しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (ld < 0.01f) ld = 0.01f;",
+    "change": "< -> <=",
+    "reason": "Ld がちょうど 0.01 のとき 0.01 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (actual_dist < 0.01f) actual_dist = 0.01f;",
+    "change": "< -> <=",
+    "reason": "距離がちょうど 0.01 のとき 0.01 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (d2 < nearest_d2) {",
+    "change": "< -> <=",
+    "reason": "機体から等距離の 2 点のどちらを最近点にするかが変わるだけで、どちらも妥当"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "while (alpha > 3.14159265f) alpha -= 2.0f * 3.14159265f;",
+    "change": "> -> >=",
+    "reason": "α がちょうど π のとき 2π を引いても sin(α) は変わらない"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "while (alpha < -3.14159265f) alpha += 2.0f * 3.14159265f;",
+    "change": "< -> <=",
+    "reason": "α がちょうど -π のとき 2π を足しても sin(α) は変わらない"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (w > params->max_angular_vel) w = params->max_angular_vel;",
+    "change": "> -> >=",
+    "reason": "w がちょうど上限のとき上限を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (w < -params->max_angular_vel) w = -params->max_angular_vel;",
+    "change": "< -> <=",
+    "reason": "w がちょうど -上限のとき -上限を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "float dx = (float)(x1 - x2);",
+    "change": "- -> +",
+    "reason": "経路は変わらず探索量だけが変わる(ゴールの f が他より大きく / 他の f が小さくなり、ゴールが最後に取り出されて全探索に近づくため、結果は最短のまま)"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (cur_x == -1 || cur_y == -1) {",
+    "change": "|| -> &&",
+    "reason": "cur_x と cur_y は常に同時に -1 になるので、どちらで判定しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "map->width = (width > PATH_GRID_MAX_WIDTH) ? PATH_GRID_MAX_WIDTH : width;",
+    "change": "> -> >=",
+    "reason": "幅がちょうど上限のとき上限を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "map->height = (height > PATH_GRID_MAX_HEIGHT) ? PATH_GRID_MAX_HEIGHT : height;",
+    "change": "> -> >=",
+    "reason": "高さがちょうど上限のとき上限を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_path/src/embed_path.c",
+    "line": "if (goal_gx >= map->width || goal_gy >= map->height) return false;",
+    "change": "|| -> &&",
+    "reason": "範囲外の終点は直後の path_grid_is_obstacle(範囲外は障害物) でも弾かれるので冗長"
   }
 ]
