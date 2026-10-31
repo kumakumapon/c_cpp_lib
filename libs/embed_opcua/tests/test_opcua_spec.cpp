@@ -298,7 +298,9 @@ TEST_CASE(variant_decoding_and_errors) {
     CHECK_EQ(opcua_decode_variant(one, 1, nullptr), 0u);
     // 符号化できない型・NULL 引数
     uint8_t buf[16];
-    opcua_variant_t bad = var((opcua_type_id_t)99);
+    opcua_variant_t bad = var(OPCUA_TYPE_NULL);
+    const int raw_type = 99; // 範囲外の型 ID (C++ 側で enum として読み出さないよう、バイト列で書き込む)
+    std::memcpy(&bad.type, &raw_type, sizeof(bad.type));
     CHECK_EQ(opcua_encode_variant(&bad, buf, sizeof(buf)), 0u);
     CHECK_EQ(opcua_encode_variant(nullptr, buf, sizeof(buf)), 0u);
     CHECK_EQ(opcua_encode_variant(&bad, nullptr, sizeof(buf)), 0u);

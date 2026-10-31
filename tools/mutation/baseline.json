@@ -75,9 +75,9 @@
     "valid": 219
   },
   "embed_opcua": {
-    "rate": 0.3375,
-    "killed": 27,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 165,
+    "valid": 165
   },
   "embed_path": {
     "rate": 1.0,
