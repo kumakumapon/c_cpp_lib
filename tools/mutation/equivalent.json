@@ -244,5 +244,41 @@
     "line": "if (goal_gx >= map->width || goal_gy >= map->height) return false;",
     "change": "|| -> &&",
     "reason": "範囲外の終点は直後の path_grid_is_obstacle(範囲外は障害物) でも弾かれるので冗長"
+  },
+  {
+    "file": "libs/embed_pid/src/pid_controller.c",
+    "line": "if (cfg->tau_d > 0.0f) {",
+    "change": "> -> >=",
+    "reason": "tau_d == 0 のとき (0*prev + dt*raw)/(0+dt) = raw で、フィルタ無効の分岐と同じ値"
+  },
+  {
+    "file": "libs/embed_pid/src/pid_controller.c",
+    "line": "if (cfg->deadband > 0.0f && fabsf(error) <= cfg->deadband) {",
+    "change": "> -> >=",
+    "reason": "deadband == 0 のとき不感帯に入るのは error == 0 だけで、0 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_pid/src/pid_controller.c",
+    "line": "bool saturated_high = (pid->output >= cfg->out_max && error > 0.0f);",
+    "change": "> -> >=",
+    "reason": "error == 0 のとき積分への加算量が 0 なので、積分を止めても更新しても同じ"
+  },
+  {
+    "file": "libs/embed_pid/src/pid_controller.c",
+    "line": "bool saturated_low  = (pid->output <= cfg->out_min && error < 0.0f);",
+    "change": "< -> <=",
+    "reason": "error == 0 のとき積分への加算量が 0 なので、積分を止めても更新しても同じ"
+  },
+  {
+    "file": "libs/embed_pid/src/pid_controller.c",
+    "line": "pid->integral = pid->saturated_output - p_val;",
+    "change": "- -> +",
+    "reason": "p_val は常に kp * 0.0f = 0 (切替時の偏差を 0 と置く) なので符号は結果に影響しない"
+  },
+  {
+    "file": "libs/embed_pid/src/pid_controller.c",
+    "line": "if (ku <= 0.0f || tu <= 0.0f) {",
+    "change": "<= -> <",
+    "reason": "ku == 0 のとき kp = 0 となり、通常の分岐でも全ゲイン 0 になる (tu 側の境界は別の変異で検出済み)"
   }
 ]
