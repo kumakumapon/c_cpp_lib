@@ -280,5 +280,53 @@
     "line": "if (ku <= 0.0f || tu <= 0.0f) {",
     "change": "<= -> <",
     "reason": "ku == 0 のとき kp = 0 となり、通常の分岐でも全ゲイン 0 になる (tu 側の境界は別の変異で検出済み)"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "if (used > mon->high_water_mark) {",
+    "change": "> -> >=",
+    "reason": "used == high_water_mark のとき同じ値を代入するだけ"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "if (total_time_us > 0) {",
+    "change": "> -> >=",
+    "reason": "直前で total_time_us == 0 を return 済みなので、この条件は常に真 (冗長)"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "if (pct > 100.0f) pct = 100.0f;",
+    "change": "> -> >=",
+    "reason": "pct == 100 のとき 100 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "if (pct < 0.0f) pct = 0.0f;",
+    "change": "< -> <=",
+    "reason": "pct は符号なし整数同士の比で負にならず、0 のとき 0 を代入しても同じ"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "size_t n = (recorder->count < max_count) ? recorder->count : max_count;",
+    "change": "< -> <=",
+    "reason": "count == max_count のとき、どちらを選んでも同じ値"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "start_idx = (recorder->head + DIAG_MAX_CRASH_LOGS - n) % DIAG_MAX_CRASH_LOGS;",
+    "change": "+ -> -",
+    "reason": "size_t の巻き戻りは 2^64 を法とし、2^64 は 16 の倍数なので mod 16 の結果が変わらない"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "start_idx = (recorder->count >= n) ? (recorder->count - n) : 0;",
+    "change": ">= -> >",
+    "reason": "n は count 以下なので count == n の場合の差は count - n = 0 と 0 で同じ"
+  },
+  {
+    "file": "libs/embed_diag/src/embed_diag.c",
+    "line": "strncpy(entry->message, msg, sizeof(entry->message) - 1);",
+    "change": "- -> +",
+    "reason": "message[48] は構造体のパディングに当たり、読み出す手段がない (直後に message[47] = 0 で終端される)"
   }
 ]
