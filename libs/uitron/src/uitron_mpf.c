@@ -8,7 +8,10 @@
 static uint8_t s_mpf_fallback_pool[UITRON_MAX_MPFID + 1][2048];
 
 ER cre_mpf(ID mpfid, const T_CMPF *pk_cmpf) {
-    if (mpfid <= 0 || mpfid > UITRON_MAX_MPFID || !pk_cmpf) {
+    if (mpfid <= 0 || mpfid > UITRON_MAX_MPFID) {
+        return E_ID;
+    }
+    if (!pk_cmpf) {
         return E_PAR;
     }
     if (pk_cmpf->blkcnt == 0 || pk_cmpf->blksz == 0) {
@@ -83,7 +86,8 @@ ER pget_mpf(ID mpfid, VP *p_blk) {
 }
 
 ER tget_mpf(ID mpfid, VP *p_blk, TMO tmout) {
-    if (mpfid <= 0 || mpfid > UITRON_MAX_MPFID || !p_blk) return E_PAR;
+    if (mpfid <= 0 || mpfid > UITRON_MAX_MPFID) return E_ID;
+    if (!p_blk) return E_PAR;
     PCB *pcb = &g_kcb.pcbs[mpfid];
     if (!pcb->is_created) return E_NOEXS;
 
@@ -109,9 +113,18 @@ ER tget_mpf(ID mpfid, VP *p_blk, TMO tmout) {
 }
 
 ER rel_mpf(ID mpfid, VP blk) {
-    if (mpfid <= 0 || mpfid > UITRON_MAX_MPFID || !blk) return E_PAR;
+    if (mpfid <= 0 || mpfid > UITRON_MAX_MPFID) return E_ID;
+    if (!blk) return E_PAR;
     PCB *pcb = &g_kcb.pcbs[mpfid];
     if (!pcb->is_created) return E_NOEXS;
+
+    /* このプールのブロック境界を指していないポインタは受け付けない */
+    const uint8_t *p = (const uint8_t *)blk;
+    if (p < pcb->pool_mem ||
+        p >= pcb->pool_mem + (size_t)pcb->cmpf.blkcnt * pcb->cmpf.blksz ||
+        (size_t)(p - pcb->pool_mem) % pcb->cmpf.blksz != 0) {
+        return E_PAR;
+    }
 
     TCB *wait_tcb = uitron_pick_waiter(TTW_MPF, mpfid, (pcb->cmpf.mpfatr & TA_TPRI) != 0);
 
@@ -138,16 +151,8 @@ ER ref_mpf(ID mpfid, T_RMPF *pk_rmpf) {
     if (!pcb->is_created) return E_NOEXS;
 
     pk_rmpf->fblkcnt = pcb->fblkcnt;
-    pk_rmpf->wtskid = TSK_SELF;
-
-    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
-        TCB *tcb = &g_kcb.tcbs[id];
-        if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {
-            if (tcb->tskwait == TTW_MPF && tcb->wid == mpfid) {
-                pk_rmpf->wtskid = id;
-                break;
-            }
-        }
-    }
+    /* 待ち行列の先頭 (属性に従った次に解除されるタスク) */
+    TCB *head = uitron_pick_waiter(TTW_MPF, mpfid, (pcb->cmpf.mpfatr & TA_TPRI) != 0);
+    pk_rmpf->wtskid = head ? head->tskid : TSK_SELF;
     return E_OK;
 }

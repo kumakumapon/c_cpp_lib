@@ -96,6 +96,9 @@ extern KERNEL_CB g_kcb;
 
 /* 内部ヘルパー関数 */
 TCB *uitron_get_tcb(ID tskid);
+/* uitron_get_tcb が NULL を返したときのエラーコード: ID が範囲外 (または自タスク指定なのに
+ * 呼出元のタスクがない) なら E_ID、範囲内の未生成なら E_NOEXS */
+ER uitron_tsk_noexist(ID tskid);
 void uitron_task_ready(TCB *tcb);
 void uitron_task_wait(TCB *tcb, STAT tskwait, ID wid, TMO tmout);
 void uitron_task_wakeup(TCB *tcb, ER er);

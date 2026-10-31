@@ -2,7 +2,10 @@
 #include <string.h>
 
 ER cre_sem(ID semid, const T_CSEM *pk_csem) {
-    if (semid <= 0 || semid > UITRON_MAX_SEMID || !pk_csem) {
+    if (semid <= 0 || semid > UITRON_MAX_SEMID) {
+        return E_ID;
+    }
+    if (!pk_csem) {
         return E_PAR;
     }
     if (pk_csem->maxsem == 0 || pk_csem->isemcnt > pk_csem->maxsem) {
@@ -104,16 +107,8 @@ ER ref_sem(ID semid, T_RSEM *pk_rsem) {
     if (!scb->is_created) return E_NOEXS;
 
     pk_rsem->semcnt = scb->semcnt;
-    pk_rsem->wtskid = TSK_SELF;
-
-    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
-        TCB *tcb = &g_kcb.tcbs[id];
-        if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {
-            if (tcb->tskwait == TTW_SEM && tcb->wid == semid) {
-                pk_rsem->wtskid = id;
-                break;
-            }
-        }
-    }
+    /* 待ち行列の先頭 (属性に従った次に解除されるタスク) */
+    TCB *head = uitron_pick_waiter(TTW_SEM, semid, (scb->csem.sematr & TA_TPRI) != 0);
+    pk_rsem->wtskid = head ? head->tskid : TSK_SELF;
     return E_OK;
 }
