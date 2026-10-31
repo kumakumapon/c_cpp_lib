@@ -359,7 +359,7 @@ mqtt_status_t mqtt_deserialize_suback(const uint8_t *buf, size_t len, uint16_t *
     if (!buf || len < 5 || !packet_id || !granted_qos) return MQTT_ERR_INVALID_PARAM;
     if (buf[0] != (MQTT_PACKET_TYPE_SUBACK << 4) || buf[1] != 3) return MQTT_ERR_MALFORMED_PACKET;
     /* 許可される値は 0 / 1 / 2 と、失敗を表す 0x80 [MQTT-3.9.3] */
-    if (buf[4] > MQTT_QOS_2 && buf[4] != 0x80) return MQTT_ERR_MALFORMED_PACKET;
+    if (buf[4] > MQTT_QOS_2 && buf[4] != MQTT_QOS_FAILURE) return MQTT_ERR_MALFORMED_PACKET;
 
     *packet_id = (uint16_t)((buf[2] << 8) | buf[3]);
     *granted_qos = (mqtt_qos_t)buf[4];
