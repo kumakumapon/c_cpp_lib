@@ -24,7 +24,7 @@ static fsm_state_t *find_state(fsm_machine_t *fsm, fsm_state_id_t id) {
 bool fsm_add_state(fsm_machine_t *fsm, fsm_state_id_t id, fsm_state_id_t parent_id,
                    const char *name, fsm_action_fn on_enter, fsm_action_fn on_exit,
                    fsm_event_fn on_event) {
-    if (!fsm || id == FSM_STATE_NONE)
+    if (!fsm || id == FSM_STATE_NONE || id == parent_id)
         return false;
     if (fsm->state_count >= FSM_MAX_STATES)
         return false;
@@ -74,6 +74,9 @@ bool fsm_transition_to(fsm_machine_t *fsm, fsm_state_id_t target_state) {
     fsm_state_t *target = find_state(fsm, target_state);
     if (!target)
         return false;
+    /* on_exit の最中に遷移を重ねると同じ状態を二重に exit してしまうため受け付けない */
+    if (fsm->exiting)
+        return false;
 
     fsm_state_id_t cur_path[FSM_MAX_STATES];
     fsm_state_id_t tgt_path[FSM_MAX_STATES];
@@ -90,31 +93,50 @@ bool fsm_transition_to(fsm_machine_t *fsm, fsm_state_id_t target_state) {
             if (cur_path[i] == tgt_path[j]) {
                 lca_cur_idx = i;
                 lca_tgt_idx = j;
+                /* 自己遷移 (現在 == 遷移先) は、その状態自身を exit して enter し直す。
+                 * 共通の先祖を一段上 (親) に取る */
+                if (i == 0 && j == 0) {
+                    lca_cur_idx = (cur_depth > 1) ? 1 : -1;
+                    lca_tgt_idx = (tgt_depth > 1) ? 1 : -1;
+                }
                 goto found_lca;
             }
         }
     }
 
 found_lca:;
+    fsm->target_state = target_state;
+
     // 1. 現在状態から LCA 直前まで on_exit を実行
     int exit_limit = (lca_cur_idx >= 0) ? lca_cur_idx : (int)cur_depth;
+    fsm->exiting = true;
     for (int i = 0; i < exit_limit; ++i) {
         fsm_state_t *st = find_state(fsm, cur_path[i]);
         if (st && st->on_exit) {
             st->on_exit(fsm, fsm->user_data);
         }
     }
+    fsm->exiting = false;
 
     // 2. LCA 直下から target 状態まで on_enter を実行
     int enter_start = (lca_tgt_idx >= 0) ? (lca_tgt_idx - 1) : ((int)tgt_depth - 1);
     for (int i = enter_start; i >= 0; --i) {
         fsm_state_t *st = find_state(fsm, tgt_path[i]);
-        if (st && st->on_enter) {
+        if (!st)
+            continue;
+        /* enter 中のコールバックから再遷移されても、入りかけの状態を起点にできるよう
+         * 現在状態を入った分だけ進めておく */
+        fsm->current_state = tgt_path[i];
+        if (st->on_enter) {
             st->on_enter(fsm, fsm->user_data);
+            /* 再遷移で別の遷移が完了していたら、この遷移の残りの enter は行わない */
+            if (fsm->target_state != target_state)
+                return true;
         }
     }
 
     fsm->current_state = target_state;
+    fsm->target_state = FSM_STATE_NONE;
     return true;
 }
 
@@ -132,7 +154,8 @@ bool fsm_dispatch(fsm_machine_t *fsm, const fsm_event_t *event) {
     fsm_state_id_t cur_id = fsm->current_state;
 
     // 階層を上位に向かってバブルアップ
-    while (cur_id != FSM_STATE_NONE) {
+    /* 親の指定が循環していても止まるよう、段数を状態数の上限で打ち切る */
+    for (size_t depth = 0; cur_id != FSM_STATE_NONE && depth < FSM_MAX_STATES; ++depth) {
         fsm_state_t *st = find_state(fsm, cur_id);
         if (!st)
             break;
@@ -159,7 +182,7 @@ bool fsm_is_in_state(const fsm_machine_t *fsm, fsm_state_id_t state_id) {
         return false;
 
     fsm_state_id_t cur = fsm->current_state;
-    while (cur != FSM_STATE_NONE) {
+    for (size_t depth = 0; cur != FSM_STATE_NONE && depth < FSM_MAX_STATES; ++depth) {
         if (cur == state_id)
             return true;
         fsm_state_t *st = find_state((fsm_machine_t *)fsm, cur);

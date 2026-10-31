@@ -35,9 +35,9 @@
     "valid": 25
   },
   "embed_fsm": {
-    "rate": 0.4474,
-    "killed": 17,
-    "valid": 38
+    "rate": 1.0,
+    "killed": 39,
+    "valid": 39
   },
   "embed_heap": {
     "rate": 1.0,
