@@ -466,5 +466,65 @@
     "line": "if (curr->size > stats->max_free_block) {",
     "change": "> -> >=",
     "reason": "同じ値を代入するだけ"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "if (!fsm || id == FSM_STATE_NONE)",
+    "change": "|| -> &&",
+    "reason": "id == FSM_STATE_NONE は探索しても必ず見つからず、fsm が NULL の呼び出しはここへ来ない"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "if (!fsm || target_state == FSM_STATE_NONE)",
+    "change": "|| -> &&",
+    "reason": "後続の find_state が NONE / NULL を拒否するので、どちらでも false を返す"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "for (size_t i = 0; i < fsm->state_count; ++i) {",
+    "change": "< -> <=",
+    "reason": "境界を 1 つ広げても、配列の範囲外 (未初期化または末尾の次の要素) を読むだけで、通常の実行では結果が変わらない (ASan / MSan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "while (cur != FSM_STATE_NONE && count < FSM_MAX_STATES) {",
+    "change": "< -> <=",
+    "reason": "境界を 1 つ広げても、配列の範囲外 (未初期化または末尾の次の要素) を読むだけで、通常の実行では結果が変わらない (ASan / MSan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "for (int i = 0; i < (int)cur_depth; ++i) {",
+    "change": "< -> <=",
+    "reason": "境界を 1 つ広げても、配列の範囲外 (未初期化または末尾の次の要素) を読むだけで、通常の実行では結果が変わらない (ASan / MSan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "for (int j = 0; j < (int)tgt_depth; ++j) {",
+    "change": "< -> <=",
+    "reason": "境界を 1 つ広げても、配列の範囲外 (未初期化または末尾の次の要素) を読むだけで、通常の実行では結果が変わらない (ASan / MSan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "for (size_t depth = 0; cur != FSM_STATE_NONE && depth < FSM_MAX_STATES; ++depth) {",
+    "change": "< -> <=",
+    "reason": "循環した親でだけ効く段数の上限で、1 段多くても真偽は変わらない (配送側の同じ境界は件数で検出済み)"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "lca_cur_idx = (cur_depth > 1) ? 1 : -1;",
+    "change": "> -> >=",
+    "reason": "cur_depth == 1 のとき 1 でも -1 でも exit の個数は 1 で同じ"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "lca_tgt_idx = (tgt_depth > 1) ? 1 : -1;",
+    "change": "> -> >=",
+    "reason": "tgt_depth == 1 のとき 1 でも -1 でも enter は先頭の 1 つで同じ"
+  },
+  {
+    "file": "libs/embed_fsm/src/embed_fsm.c",
+    "line": "strncpy(st->name, name, sizeof(st->name) - 1);",
+    "change": "- -> +",
+    "reason": "1 バイト多くコピーされる先は構造体のパディングで、読み出す手段がない (直後の終端処理で文字列としては同じ)"
   }
 ]
