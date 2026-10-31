@@ -197,6 +197,13 @@ void *embed_heap_calloc(embed_heap_t *heap, size_t num, size_t size) {
     return ptr;
 }
 
+/* ユーザーポインタがヘッダを読める位置か (範囲内かつ境界に揃っているか) を確認する。
+ * 先頭ヘッダより手前や、揃っていない位置のヘッダを読まないようにするための検査 */
+static bool ptr_in_heap(const embed_heap_t *heap, const uint8_t *p) {
+    return p >= heap->buffer + BLOCK_HEADER_SIZE && p < heap->buffer + heap->buffer_size &&
+           ((uintptr_t)p % EMBED_HEAP_DEFAULT_ALIGNMENT) == 0;
+}
+
 static void free_internal(embed_heap_t *heap, void *ptr) {
     if (!heap || !ptr) {
         return;
@@ -204,7 +211,7 @@ static void free_internal(embed_heap_t *heap, void *ptr) {
 
     /* ポインタ範囲チェック */
     uint8_t *p = (uint8_t *)ptr;
-    if (p < heap->buffer || p >= heap->buffer + heap->buffer_size) {
+    if (!ptr_in_heap(heap, p)) {
         return; /* ヒープ範囲外 */
     }
 
@@ -259,7 +266,7 @@ void *embed_heap_realloc(embed_heap_t *heap, void *ptr, size_t new_size) {
     heap_enter_critical(heap);
 
     uint8_t *p = (uint8_t *)ptr;
-    if (p < heap->buffer || p >= heap->buffer + heap->buffer_size) {
+    if (!ptr_in_heap(heap, p)) {
         heap_exit_critical(heap);
         return NULL;
     }
