@@ -71,6 +71,16 @@ static void w_utf8(pkt_writer_t *w, const char *str, size_t len) {
     w_bytes(w, str, len);
 }
 
+/* PUBLISH のトピック名: 1 文字以上で、ワイルドカード('#' '+')を含まない
+ * [MQTT-4.7.3-1] [MQTT-3.3.2-2] */
+static bool topic_name_valid(const char *topic, size_t len) {
+    if (len == 0) return false;
+    for (size_t i = 0; i < len; ++i) {
+        if (topic[i] == '#' || topic[i] == '+') return false;
+    }
+    return true;
+}
+
 /* Remaining Length のバイト数。符号化できない長さ(>268435455)は 0 */
 static size_t remaining_length_bytes(size_t length) {
     if (length <= 127) return 1;
@@ -111,6 +121,13 @@ bool mqtt_serialize_connect(const mqtt_connect_options_t *options, uint8_t *buf,
 
     /* 各フィールドは 2 バイト長プレフィックスで表現できる範囲に限る */
     if (id_len > 0xFFFF || will_topic_len > 0xFFFF || user_len > 0xFFFF || pass_len > 0xFFFF) return false;
+
+    /* パスワードはユーザー名なしでは指定できない [MQTT-3.1.2-22] */
+    if (options->password && !options->username) return false;
+    /* 長さ 0 のクライアント ID は clean session のときだけ [MQTT-3.1.3-7] */
+    if (id_len == 0 && !options->clean_session) return false;
+    /* 遺言 QoS は 0..2 [MQTT-3.1.2-14] */
+    if (has_will && options->will_qos > MQTT_QOS_2) return false;
 
     size_t rem_len = 10 + 2 + id_len;
     if (has_will) rem_len += 2 + will_topic_len + 2 + options->will_message_len;
@@ -160,6 +177,8 @@ bool mqtt_serialize_publish(const mqtt_message_t *msg, uint8_t *buf, size_t buf_
 
     size_t topic_len = msg->topic_len ? msg->topic_len : strlen(msg->topic);
     if (topic_len > 0xFFFF || msg->payload_len > SIZE_MAX / 2) return false;
+    if (!topic_name_valid(msg->topic, topic_len)) return false;
+    if (msg->qos > 0 && msg->packet_id == 0) return false; /* [MQTT-2.3.1-1] */
     size_t rem_len = 2 + topic_len + (msg->qos > 0 ? 2 : 0) + msg->payload_len;
 
     uint8_t header_byte = (uint8_t)(MQTT_PACKET_TYPE_PUBLISH << 4);
@@ -190,9 +209,10 @@ bool mqtt_serialize_puback(uint16_t packet_id, uint8_t *buf, size_t buf_size, si
 
 bool mqtt_serialize_subscribe(uint16_t packet_id, const char *topic, mqtt_qos_t qos, uint8_t *buf, size_t buf_size, size_t *out_len) {
     if (!topic || !buf || !out_len || qos > MQTT_QOS_2) return false;
+    if (packet_id == 0) return false; /* パケット ID 0 は不正 [MQTT-2.3.1-1] */
 
     size_t topic_len = strlen(topic);
-    if (topic_len > 0xFFFF) return false;
+    if (topic_len == 0 || topic_len > 0xFFFF) return false; /* 空のフィルタは不正 [MQTT-4.7.3-1] */
     size_t rem_len = 2 + 2 + topic_len + 1; // Packet ID(2) + TopicLen(2) + Topic + QoS(1)
 
     pkt_writer_t w;
@@ -208,9 +228,10 @@ bool mqtt_serialize_subscribe(uint16_t packet_id, const char *topic, mqtt_qos_t 
 
 bool mqtt_serialize_unsubscribe(uint16_t packet_id, const char *topic, uint8_t *buf, size_t buf_size, size_t *out_len) {
     if (!topic || !buf || !out_len) return false;
+    if (packet_id == 0) return false; /* パケット ID 0 は不正 [MQTT-2.3.1-1] */
 
     size_t topic_len = strlen(topic);
-    if (topic_len > 0xFFFF) return false;
+    if (topic_len == 0 || topic_len > 0xFFFF) return false; /* 空のフィルタは不正 [MQTT-4.7.3-1] */
     size_t rem_len = 2 + 2 + topic_len; // Packet ID(2) + TopicLen(2) + Topic
 
     pkt_writer_t w;
@@ -251,7 +272,8 @@ mqtt_status_t mqtt_peek_packet_info(const uint8_t *buf, size_t len,
     size_t rem_len = 0;
     size_t rem_len_bytes = mqtt_decode_remaining_length(&buf[1], len - 1, &rem_len);
     if (rem_len_bytes == 0) {
-        return MQTT_ERR_INCOMPLETE_PACKET;
+        /* 4 バイト分そろっても継続ビットが立っていれば、Remaining Length は不正 (最大 4 バイト) */
+        return len >= 5 ? MQTT_ERR_MALFORMED_PACKET : MQTT_ERR_INCOMPLETE_PACKET;
     }
 
     *total_packet_len = 1 + rem_len_bytes + rem_len;
@@ -264,7 +286,9 @@ mqtt_status_t mqtt_peek_packet_info(const uint8_t *buf, size_t len,
 
 mqtt_status_t mqtt_deserialize_connack(const uint8_t *buf, size_t len, bool *session_present, mqtt_connack_rc_t *rc) {
     if (!buf || len < 4 || !session_present || !rc) return MQTT_ERR_INVALID_PARAM;
-    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_CONNACK || buf[1] != 2) {
+    /* 固定ヘッダは 0x20 (予約フラグは 0) [MQTT-2.2.2-2]。上位 7 ビットは予約 [MQTT-3.2.2-1]。
+     * リターンコードは 0..5 */
+    if (buf[0] != 0x20 || buf[1] != 2 || (buf[2] & 0xFE) != 0 || buf[3] > MQTT_CONNACK_NOT_AUTHORIZED) {
         return MQTT_ERR_MALFORMED_PACKET;
     }
 
@@ -298,6 +322,7 @@ mqtt_status_t mqtt_deserialize_publish(const uint8_t *buf, size_t len, mqtt_mess
     offset += 2;
 
     if (topic_len > packet_end - offset) return MQTT_ERR_MALFORMED_PACKET;
+    if (!topic_name_valid((const char *)&buf[offset], topic_len)) return MQTT_ERR_MALFORMED_PACKET;
 
     msg->topic = (const char *)&buf[offset];
     msg->topic_len = topic_len;
@@ -307,6 +332,7 @@ mqtt_status_t mqtt_deserialize_publish(const uint8_t *buf, size_t len, mqtt_mess
     if (msg->qos > 0) {
         if (packet_end - offset < 2) return MQTT_ERR_MALFORMED_PACKET;
         msg->packet_id = (uint16_t)((buf[offset] << 8) | buf[offset + 1]);
+        if (msg->packet_id == 0) return MQTT_ERR_MALFORMED_PACKET; /* [MQTT-2.3.1-1] */
         offset += 2;
     } else {
         msg->packet_id = 0;
@@ -321,7 +347,7 @@ mqtt_status_t mqtt_deserialize_publish(const uint8_t *buf, size_t len, mqtt_mess
 
 mqtt_status_t mqtt_deserialize_puback(const uint8_t *buf, size_t len, uint16_t *packet_id) {
     if (!buf || len < 4 || !packet_id) return MQTT_ERR_INVALID_PARAM;
-    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_PUBACK || buf[1] != 2) {
+    if (buf[0] != (MQTT_PACKET_TYPE_PUBACK << 4) || buf[1] != 2) {
         return MQTT_ERR_MALFORMED_PACKET;
     }
 
@@ -331,7 +357,9 @@ mqtt_status_t mqtt_deserialize_puback(const uint8_t *buf, size_t len, uint16_t *
 
 mqtt_status_t mqtt_deserialize_suback(const uint8_t *buf, size_t len, uint16_t *packet_id, mqtt_qos_t *granted_qos) {
     if (!buf || len < 5 || !packet_id || !granted_qos) return MQTT_ERR_INVALID_PARAM;
-    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_SUBACK || buf[1] != 3) return MQTT_ERR_MALFORMED_PACKET;
+    if (buf[0] != (MQTT_PACKET_TYPE_SUBACK << 4) || buf[1] != 3) return MQTT_ERR_MALFORMED_PACKET;
+    /* 許可される値は 0 / 1 / 2 と、失敗を表す 0x80 [MQTT-3.9.3] */
+    if (buf[4] > MQTT_QOS_2 && buf[4] != 0x80) return MQTT_ERR_MALFORMED_PACKET;
 
     *packet_id = (uint16_t)((buf[2] << 8) | buf[3]);
     *granted_qos = (mqtt_qos_t)buf[4];
@@ -340,7 +368,7 @@ mqtt_status_t mqtt_deserialize_suback(const uint8_t *buf, size_t len, uint16_t *
 
 mqtt_status_t mqtt_deserialize_unsuback(const uint8_t *buf, size_t len, uint16_t *packet_id) {
     if (!buf || len < 4 || !packet_id) return MQTT_ERR_INVALID_PARAM;
-    if ((buf[0] >> 4) != MQTT_PACKET_TYPE_UNSUBACK || buf[1] != 2) return MQTT_ERR_MALFORMED_PACKET;
+    if (buf[0] != (MQTT_PACKET_TYPE_UNSUBACK << 4) || buf[1] != 2) return MQTT_ERR_MALFORMED_PACKET;
 
     *packet_id = (uint16_t)((buf[2] << 8) | buf[3]);
     return MQTT_OK;

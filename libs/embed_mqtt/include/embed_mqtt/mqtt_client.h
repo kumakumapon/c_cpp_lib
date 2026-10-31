@@ -31,6 +31,7 @@ struct mqtt_client {
     uint16_t next_packet_id;
     uint16_t keep_alive_sec;
     uint32_t last_activity_time;
+    bool tx_since_yield;        /**< 前回の yield 以降に何か送信したか (Keep Alive の起点) */
 
     /* 送信コールバック */
     mqtt_send_fn send_fn;

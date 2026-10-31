@@ -11,6 +11,12 @@ void mqtt_client_init(mqtt_client_t *client, mqtt_send_fn send_fn, void *user_da
     client->keep_alive_sec = MQTT_DEFAULT_KEEP_ALIVE;
 }
 
+/* 送信はすべてここを通し、Keep Alive の起点となる「最後に送った時刻」を記録できるようにする */
+static void client_send(mqtt_client_t *client, const uint8_t *data, size_t len) {
+    client->tx_since_yield = true;
+    client->send_fn(data, len, client->user_data);
+}
+
 /* Packet Identifier 0 は不正値のため、ラップアラウンド時に飛ばす */
 static uint16_t next_packet_id(mqtt_client_t *client) {
     uint16_t id = client->next_packet_id++;
@@ -32,6 +38,8 @@ void mqtt_client_set_callbacks(mqtt_client_t *client,
 
 bool mqtt_client_connect(mqtt_client_t *client, const mqtt_connect_options_t *options) {
     if (!client || !options || !client->send_fn) return false;
+    /* 2 つ目の CONNECT は不正なので、切断状態からのみ接続できる [MQTT-3.1.0-2] */
+    if (client->state != MQTT_STATE_DISCONNECTED) return false;
 
     uint8_t tx_buf[MQTT_MAX_PACKET_SIZE];
     size_t tx_len = 0;
@@ -42,12 +50,13 @@ bool mqtt_client_connect(mqtt_client_t *client, const mqtt_connect_options_t *op
 
     client->keep_alive_sec = options->keep_alive_sec ? options->keep_alive_sec : MQTT_DEFAULT_KEEP_ALIVE;
     client->state = MQTT_STATE_CONNECTING;
-    client->send_fn(tx_buf, tx_len, client->user_data);
+    client_send(client, tx_buf, tx_len);
     return true;
 }
 
 bool mqtt_client_publish(mqtt_client_t *client, const char *topic, const void *payload, size_t payload_len, mqtt_qos_t qos, bool retain) {
     if (!client || !topic || !client->send_fn) return false;
+    if (client->state == MQTT_STATE_DISCONNECTED) return false;
 
     mqtt_message_t msg;
     memset(&msg, 0, sizeof(msg));
@@ -67,12 +76,13 @@ bool mqtt_client_publish(mqtt_client_t *client, const char *topic, const void *p
         return false;
     }
 
-    client->send_fn(tx_buf, tx_len, client->user_data);
+    client_send(client, tx_buf, tx_len);
     return true;
 }
 
 bool mqtt_client_subscribe(mqtt_client_t *client, const char *topic, mqtt_qos_t qos) {
     if (!client || !topic || !client->send_fn) return false;
+    if (client->state == MQTT_STATE_DISCONNECTED) return false;
 
     uint16_t packet_id = next_packet_id(client);
     uint8_t tx_buf[MQTT_MAX_PACKET_SIZE];
@@ -82,12 +92,13 @@ bool mqtt_client_subscribe(mqtt_client_t *client, const char *topic, mqtt_qos_t 
         return false;
     }
 
-    client->send_fn(tx_buf, tx_len, client->user_data);
+    client_send(client, tx_buf, tx_len);
     return true;
 }
 
 bool mqtt_client_unsubscribe(mqtt_client_t *client, const char *topic) {
     if (!client || !topic || !client->send_fn) return false;
+    if (client->state == MQTT_STATE_DISCONNECTED) return false;
 
     uint16_t packet_id = next_packet_id(client);
     uint8_t tx_buf[MQTT_MAX_PACKET_SIZE];
@@ -97,12 +108,13 @@ bool mqtt_client_unsubscribe(mqtt_client_t *client, const char *topic) {
         return false;
     }
 
-    client->send_fn(tx_buf, tx_len, client->user_data);
+    client_send(client, tx_buf, tx_len);
     return true;
 }
 
 bool mqtt_client_ping(mqtt_client_t *client) {
     if (!client || !client->send_fn) return false;
+    if (client->state == MQTT_STATE_DISCONNECTED) return false;
 
     uint8_t tx_buf[4];
     size_t tx_len = 0;
@@ -111,12 +123,13 @@ bool mqtt_client_ping(mqtt_client_t *client) {
         return false;
     }
 
-    client->send_fn(tx_buf, tx_len, client->user_data);
+    client_send(client, tx_buf, tx_len);
     return true;
 }
 
 bool mqtt_client_disconnect(mqtt_client_t *client) {
     if (!client || !client->send_fn) return false;
+    if (client->state == MQTT_STATE_DISCONNECTED) return false;
 
     uint8_t tx_buf[4];
     size_t tx_len = 0;
@@ -125,7 +138,7 @@ bool mqtt_client_disconnect(mqtt_client_t *client) {
         return false;
     }
 
-    client->send_fn(tx_buf, tx_len, client->user_data);
+    client_send(client, tx_buf, tx_len);
     client->state = MQTT_STATE_DISCONNECTED;
     return true;
 }
@@ -159,7 +172,7 @@ static void process_single_packet(mqtt_client_t *client, const uint8_t *packet, 
                 uint8_t ack_buf[4];
                 size_t ack_len = 0;
                 if (mqtt_serialize_puback(msg.packet_id, ack_buf, sizeof(ack_buf), &ack_len)) {
-                    client->send_fn(ack_buf, ack_len, client->user_data);
+                    client_send(client, ack_buf, ack_len);
                 }
             }
 
@@ -218,6 +231,11 @@ void mqtt_client_feed_bytes(mqtt_client_t *client, const uint8_t *data, size_t l
         size_t total_packet_len = 0;
 
         mqtt_status_t st = mqtt_peek_packet_info(client->rx_buffer, client->rx_len, &ptype, &total_packet_len);
+        if (st == MQTT_ERR_MALFORMED_PACKET) {
+            /* パケットの境界が分からなくなったので、受信済みのバイトを捨てる */
+            client->rx_len = 0;
+            break;
+        }
         if (st != MQTT_OK) {
             break; /* パケット受信完了待ち */
         }
@@ -237,9 +255,16 @@ void mqtt_client_feed_bytes(mqtt_client_t *client, const uint8_t *data, size_t l
 void mqtt_client_yield(mqtt_client_t *client, uint32_t current_time_sec) {
     if (!client || client->state != MQTT_STATE_CONNECTED) return;
 
+    /* 前回の yield 以降に何か送っていれば、今を最後の送信時刻とみなす (接続直後もここで起点が決まる) */
+    if (client->tx_since_yield) {
+        client->last_activity_time = current_time_sec;
+        client->tx_since_yield = false;
+    }
+
     if (client->keep_alive_sec > 0) {
         if (current_time_sec - client->last_activity_time >= client->keep_alive_sec) {
             mqtt_client_ping(client);
+            client->tx_since_yield = false;
             client->last_activity_time = current_time_sec;
         }
     }
