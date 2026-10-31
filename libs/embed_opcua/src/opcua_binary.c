@@ -7,16 +7,12 @@
 size_t opcua_encode_u8(uint8_t val, uint8_t *dst, size_t cap) {
     if (!dst || cap < 1)
         return 0;
-    if (!dst)
-        return 0;
     dst[0] = val;
     return 1;
 }
 
 size_t opcua_encode_u16(uint16_t val, uint8_t *dst, size_t cap) {
     if (!dst || cap < 2)
-        return 0;
-    if (!dst)
         return 0;
     dst[0] = (uint8_t)(val & 0xFF);
     dst[1] = (uint8_t)((val >> 8) & 0xFF);
@@ -25,8 +21,6 @@ size_t opcua_encode_u16(uint16_t val, uint8_t *dst, size_t cap) {
 
 size_t opcua_encode_u32(uint32_t val, uint8_t *dst, size_t cap) {
     if (!dst || cap < 4)
-        return 0;
-    if (!dst)
         return 0;
     dst[0] = (uint8_t)(val & 0xFF);
     dst[1] = (uint8_t)((val >> 8) & 0xFF);
@@ -38,8 +32,6 @@ size_t opcua_encode_u32(uint32_t val, uint8_t *dst, size_t cap) {
 size_t opcua_encode_u64(uint64_t val, uint8_t *dst, size_t cap) {
     if (!dst || cap < 8)
         return 0;
-    if (!dst)
-        return 0;
     for (int i = 0; i < 8; ++i) {
         dst[i] = (uint8_t)((val >> (i * 8)) & 0xFF);
     }
@@ -47,16 +39,12 @@ size_t opcua_encode_u64(uint64_t val, uint8_t *dst, size_t cap) {
 }
 
 size_t opcua_encode_float(float val, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 4)
-        return 0;
     uint32_t u;
     memcpy(&u, &val, sizeof(float));
     return opcua_encode_u32(u, dst, cap);
 }
 
 size_t opcua_encode_double(double val, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 8)
-        return 0;
     uint64_t u;
     memcpy(&u, &val, sizeof(double));
     return opcua_encode_u64(u, dst, cap);
@@ -64,8 +52,6 @@ size_t opcua_encode_double(double val, uint8_t *dst, size_t cap) {
 
 size_t opcua_encode_string(const char *str, uint8_t *dst, size_t cap) {
     if (!dst || cap < 4)
-        return 0;
-    if (!dst)
         return 0;
     if (!str) {
         return opcua_encode_u32((uint32_t)-1, dst, cap); // Null String (-1)
@@ -80,9 +66,7 @@ size_t opcua_encode_string(const char *str, uint8_t *dst, size_t cap) {
 }
 
 size_t opcua_encode_nodeid(const opcua_nodeid_t *nodeid, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 1)
-        return 0;
-    if (!nodeid || !dst)
+    if (!dst || !nodeid || cap < 1)
         return 0;
     size_t off = 0;
 
@@ -141,9 +125,7 @@ size_t opcua_encode_nodeid(const opcua_nodeid_t *nodeid, uint8_t *dst, size_t ca
 }
 
 size_t opcua_encode_variant(const opcua_variant_t *variant, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 1)
-        return 0;
-    if (!variant || !dst)
+    if (!dst || !variant || cap < 1)
         return 0;
     size_t off = 0;
     dst[off++] = (uint8_t)variant->type;
@@ -216,9 +198,7 @@ size_t opcua_encode_variant(const opcua_variant_t *variant, uint8_t *dst, size_t
 }
 
 size_t opcua_encode_datavalue(const opcua_datavalue_t *dv, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 1)
-        return 0;
-    if (!dv || !dst)
+    if (!dst || !dv || cap < 1)
         return 0;
     size_t off = 0;
 
@@ -256,9 +236,7 @@ size_t opcua_encode_datavalue(const opcua_datavalue_t *dv, uint8_t *dst, size_t 
 }
 
 size_t opcua_encode_tcp_header(const opcua_tcp_header_t *hdr, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 8)
-        return 0;
-    if (!hdr || !dst)
+    if (!dst || !hdr || cap < 8)
         return 0;
     memcpy(&dst[0], hdr->msg_type, 3);
     dst[3] = (uint8_t)hdr->is_final;
@@ -267,9 +245,7 @@ size_t opcua_encode_tcp_header(const opcua_tcp_header_t *hdr, uint8_t *dst, size
 }
 
 size_t opcua_encode_hello(const opcua_hello_message_t *hello, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 32)
-        return 0;
-    if (!hello || !dst)
+    if (!dst || !hello || cap < 32)
         return 0;
     size_t payload_len = 20; // 5 * 4 bytes
     if (!memchr(hello->endpoint_url, 0, sizeof(hello->endpoint_url)))
@@ -325,9 +301,7 @@ size_t opcua_encode_hello(const opcua_hello_message_t *hello, uint8_t *dst, size
 }
 
 size_t opcua_encode_ack(const opcua_ack_message_t *ack, uint8_t *dst, size_t cap) {
-    if (!dst || cap < 28)
-        return 0;
-    if (!ack || !dst)
+    if (!dst || !ack || cap < 28)
         return 0;
     opcua_tcp_header_t hdr;
     memcpy(hdr.msg_type, "ACK", 3);
@@ -371,8 +345,6 @@ size_t opcua_encode_ack(const opcua_ack_message_t *ack, uint8_t *dst, size_t cap
 size_t opcua_encode_error(uint32_t error_code, const char *reason, uint8_t *dst, size_t cap) {
     if (!dst || cap < 16)
         return 0;
-    if (!dst)
-        return 0;
     size_t r_len = reason ? strlen(reason) : 0;
     if (r_len > INT32_MAX || r_len > cap - 16)
         return 0;
@@ -403,36 +375,28 @@ size_t opcua_encode_error(uint32_t error_code, const char *reason, uint8_t *dst,
  * デコード
  * --------------------------------------------------------- */
 size_t opcua_decode_u8(const uint8_t *src, size_t len, uint8_t *val) {
-    if (!src || len < 1)
-        return 0;
-    if (!src || !val)
+    if (!src || !val || len < 1)
         return 0;
     *val = src[0];
     return 1;
 }
 
 size_t opcua_decode_u16(const uint8_t *src, size_t len, uint16_t *val) {
-    if (!src || len < 2)
-        return 0;
-    if (!src || !val)
+    if (!src || !val || len < 2)
         return 0;
     *val = (uint16_t)(src[0] | (src[1] << 8));
     return 2;
 }
 
 size_t opcua_decode_u32(const uint8_t *src, size_t len, uint32_t *val) {
-    if (!src || len < 4)
-        return 0;
-    if (!src || !val)
+    if (!src || !val || len < 4)
         return 0;
     *val = (uint32_t)(src[0] | (src[1] << 8) | (src[2] << 16) | ((uint32_t)src[3] << 24));
     return 4;
 }
 
 size_t opcua_decode_u64(const uint8_t *src, size_t len, uint64_t *val) {
-    if (!src || len < 8)
-        return 0;
-    if (!src || !val)
+    if (!src || !val || len < 8)
         return 0;
     uint64_t u = 0;
     for (int i = 0; i < 8; ++i) {
@@ -443,8 +407,6 @@ size_t opcua_decode_u64(const uint8_t *src, size_t len, uint64_t *val) {
 }
 
 size_t opcua_decode_float(const uint8_t *src, size_t len, float *val) {
-    if (!src || len < 4)
-        return 0;
     uint32_t u;
     size_t off = opcua_decode_u32(src, len, &u);
     if (!off || !val)
@@ -454,8 +416,6 @@ size_t opcua_decode_float(const uint8_t *src, size_t len, float *val) {
 }
 
 size_t opcua_decode_double(const uint8_t *src, size_t len, double *val) {
-    if (!src || len < 8)
-        return 0;
     uint64_t u;
     size_t off = opcua_decode_u64(src, len, &u);
     if (!off || !val)
@@ -465,9 +425,7 @@ size_t opcua_decode_double(const uint8_t *src, size_t len, double *val) {
 }
 
 size_t opcua_decode_string(const uint8_t *src, size_t src_len, char *dst, size_t max_dst_len) {
-    if (!src || src_len < 4)
-        return 0;
-    if (!src || !dst || max_dst_len == 0)
+    if (!src || !dst || src_len < 4 || max_dst_len == 0)
         return 0;
     uint32_t len = 0;
     size_t off = opcua_decode_u32(src, src_len, &len);
@@ -486,9 +444,7 @@ size_t opcua_decode_string(const uint8_t *src, size_t src_len, char *dst, size_t
 }
 
 size_t opcua_decode_nodeid(const uint8_t *src, size_t len, opcua_nodeid_t *nodeid) {
-    if (!src || len < 1)
-        return 0;
-    if (!src || !nodeid)
+    if (!src || !nodeid || len < 1)
         return 0;
     size_t off = 0;
     uint8_t fmt = src[off++];
@@ -555,9 +511,7 @@ size_t opcua_decode_nodeid(const uint8_t *src, size_t len, opcua_nodeid_t *nodei
 }
 
 size_t opcua_decode_variant(const uint8_t *src, size_t len, opcua_variant_t *variant) {
-    if (!src || len < 1)
-        return 0;
-    if (!src || !variant)
+    if (!src || !variant || len < 1)
         return 0;
     size_t off = 0;
     variant->type = (opcua_type_id_t)src[off++];
@@ -626,9 +580,7 @@ size_t opcua_decode_variant(const uint8_t *src, size_t len, opcua_variant_t *var
 }
 
 size_t opcua_decode_datavalue(const uint8_t *src, size_t len, opcua_datavalue_t *dv) {
-    if (!src || len < 1)
-        return 0;
-    if (!src || !dv)
+    if (!src || !dv || len < 1)
         return 0;
     size_t off = 0;
     uint8_t mask = src[off++];
@@ -666,9 +618,7 @@ size_t opcua_decode_datavalue(const uint8_t *src, size_t len, opcua_datavalue_t 
 }
 
 size_t opcua_decode_tcp_header(const uint8_t *src, size_t len, opcua_tcp_header_t *hdr) {
-    if (!src || len < 8)
-        return 0;
-    if (!src || len < 8 || !hdr)
+    if (!src || !hdr || len < 8)
         return 0;
     memcpy(hdr->msg_type, src, 3);
     hdr->msg_type[3] = '\0';
@@ -678,9 +628,7 @@ size_t opcua_decode_tcp_header(const uint8_t *src, size_t len, opcua_tcp_header_
 }
 
 size_t opcua_decode_hello(const uint8_t *src, size_t len, opcua_hello_message_t *hello) {
-    if (!src || len < 32)
-        return 0;
-    if (!src || len < 28 || !hello)
+    if (!src || !hello || len < 32)
         return 0;
     opcua_tcp_header_t hdr;
     size_t off = opcua_decode_tcp_header(src, len, &hdr);
@@ -730,9 +678,7 @@ size_t opcua_decode_hello(const uint8_t *src, size_t len, opcua_hello_message_t 
 }
 
 size_t opcua_decode_ack(const uint8_t *src, size_t len, opcua_ack_message_t *ack) {
-    if (!src || len < 28)
-        return 0;
-    if (!src || len < 28 || !ack)
+    if (!src || !ack || len < 28)
         return 0;
     opcua_tcp_header_t hdr;
     size_t off = opcua_decode_tcp_header(src, len, &hdr);
