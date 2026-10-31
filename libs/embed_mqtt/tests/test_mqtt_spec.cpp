@@ -944,4 +944,18 @@ TEST_CASE(client_with_keep_alive_zero_never_pings) {
     CHECK(k.wire.sent.empty());
 }
 
+TEST_CASE(topic_validation_looks_only_at_the_topic_bytes) {
+    // トピックの直後のバイト (ペイロード) にワイルドカードがあっても、トピックは有効
+    mqtt_message_t out{};
+    const uint8_t pkt[] = {0x30, 0x05, 0x00, 0x01, 't', '#', 'x'};
+    CHECK_EQ(mqtt_deserialize_publish(pkt, sizeof(pkt), &out), MQTT_OK);
+    CHECK_EQ(out.topic_len, 1u);
+    CHECK_EQ(out.payload_len, 2u);
+    mqtt_message_t part = msg("abc#", "x"); // topic_len=3 なら "abc" だけがトピック
+    part.topic_len = 3;
+    bool ok = false;
+    publish_bytes(part, &ok);
+    CHECK(ok);
+}
+
 EMBED_TEST_MAIN()
