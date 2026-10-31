@@ -820,5 +820,89 @@
     "line": "if (rem > 0) {",
     "change": "> -> >=",
     "reason": "長さ 0 の memmove は何もしない"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "for (size_t i = 0; i < EIP_MAX_SESSIONS; ++i) {",
+    "change": "< -> <=",
+    "reason": "配列の 1 要素先を読むだけで、範囲外参照以外の違いがない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "for (size_t i = 0; i < EIP_MAX_ASSEMBLIES; ++i) {",
+    "change": "< -> <=",
+    "reason": "配列の 1 要素先を読むだけで、範囲外参照以外の違いがない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "size < adapter->assemblies[i].size ? size : adapter->assemblies[i].size;",
+    "change": "< -> <=",
+    "reason": "等しいときはどちらを選んでも同じ値"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "while (len < sizeof(id->product_name) && id->product_name[len] != '\\0')",
+    "change": "< -> <=",
+    "reason": "32 文字ちょうどの名前で 1 バイト先を読むだけで、範囲外参照以外の違いがない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "if (len < 0)",
+    "change": "< -> <=",
+    "reason": "identity_attribute は 0 を返さない (属性があれば 2 以上、なければ -1)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "if (identity_attribute(adapter, req.path.attribute_id, resp_payload) < 0)",
+    "change": "< -> <=",
+    "reason": "identity_attribute は 0 を返さない (属性があれば 2 以上、なければ -1)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_adapter.c",
+    "line": "if (!adapter || !req_data || req_len < EIP_ENCAP_HEADER_SIZE || !resp_data)",
+    "change": "|| -> &&",
+    "reason": "ヘッダ長に満たない入力は、直後の eip_decode_encap_header が同じく 0 を返す (二重の検査)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_cip.c",
+    "line": "if (resp->data && resp->data_len > 0) {",
+    "change": "> -> >=",
+    "reason": "長さ 0 の memcpy は何もしない"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_cip.c",
+    "line": "if (resp->data && resp->data_len > 0) {",
+    "change": "&& -> ||",
+    "reason": "長さ 0 の memcpy は何もしない"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_cip.c",
+    "line": "if (req->data && req->data_len > 0) {",
+    "change": "> -> >=",
+    "reason": "長さ 0 の memcpy は何もしない (データがなく長さがある要求は事前に拒否済み)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_cip.c",
+    "line": "if (req->data && req->data_len > 0) {",
+    "change": "&& -> ||",
+    "reason": "長さ 0 の memcpy は何もしない (データがなく長さがある要求は事前に拒否済み)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_cip.c",
+    "line": "if (off >= src_len) return 0;",
+    "change": ">= -> >",
+    "reason": "境界の 1 バイト先を読むだけで、範囲外参照以外の違いがない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_encap.c",
+    "line": "for (uint16_t i = 0; i < item_count; ++i) {",
+    "change": "< -> <=",
+    "reason": "ループの先頭でアイテムヘッダの境界検査があり、1 回多く回っても false を返す"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_encap.c",
+    "line": "if (cip_len > 0xFFFF || cpf_len > 0xFFFF) return 0;",
+    "change": "> -> >=",
+    "reason": "cip_len == 0xFFFF のとき cpf_len も 0xFFFF を超えるので、直後の条件が同じく拒否する"
   }
 ]
