@@ -699,4 +699,15 @@ TEST_CASE(boundary_cases_for_parsing) {
     CHECK_EQ(p.instance_id, 9u);
 }
 
+TEST_CASE(parse_does_not_read_items_beyond_the_payload_length) {
+    // アイテム数 2 だが、2 つ目のヘッダはペイロードの外 (その先のバイトが有効なデータアイテムでも読まない)
+    const Bytes buf = cat({u32(0), u16(0), u16(2), u16(0x8000), u16(4), Bytes{1, 2, 3, 4}, // ここまでで 16 バイト
+                           u16(0x00B2), u16(1), Bytes{0x77}});
+    const uint8_t *d = nullptr;
+    size_t n = 0;
+    CHECK(!eip_parse_send_rr_data(buf.data(), 16, &d, &n));
+    CHECK(eip_parse_send_rr_data(buf.data(), buf.size(), &d, &n)); // 全体を渡せば読める
+    CHECK_EQ(d[0], 0x77);
+}
+
 EMBED_TEST_MAIN()
