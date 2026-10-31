@@ -3,13 +3,13 @@ add_executable(test_filter
     test_filter.cpp
 )
 
-target_link_libraries(test_filter
-    PRIVATE
-        embed_filter
+# 理論値(漸化式の手計算・幾何学的に決まる姿勢)を固定するテスト
+add_executable(test_filter_spec
+    test_filter_spec.cpp
 )
 
-target_set_warnings(test_filter)
-
-add_test(NAME test_filter COMMAND test_filter)
-
-target_link_libraries(test_filter PRIVATE embed_test)
+foreach(t test_filter test_filter_spec)
+    target_link_libraries(${t} PRIVATE embed_filter embed_test)
+    target_set_warnings(${t})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()
