@@ -903,4 +903,124 @@ TEST_CASE(tcp_msg_returns_the_first_node_value) {
     CHECK_EQ(opcua_server_process_tcp_message(&f.s, chunk.data(), chunk.size(), resp, sizeof(resp)), 0u);
 }
 
+// ---- 境界・引数の組み合わせ ----
+TEST_CASE(zero_length_and_exact_capacity_boundaries) {
+    uint8_t buf[64];
+    std::memset(buf, 0, sizeof(buf));
+    // 有効なポインタでも、長さ 0 / 足りない長さなら何も読まない
+    opcua_variant_t v;
+    opcua_nodeid_t n;
+    opcua_datavalue_t dv;
+    opcua_tcp_header_t th;
+    opcua_hello_message_t hello;
+    opcua_ack_message_t ack;
+    char s[16];
+    CHECK_EQ(opcua_decode_variant(buf, 0, &v), 0u);
+    CHECK_EQ(opcua_decode_nodeid(buf, 0, &n), 0u);
+    CHECK_EQ(opcua_decode_datavalue(buf, 0, &dv), 0u);
+    CHECK_EQ(opcua_decode_string(buf, 0, s, sizeof(s)), 0u);
+    CHECK_EQ(opcua_decode_string(buf, 3, s, sizeof(s)), 0u);
+    CHECK_EQ(opcua_decode_string(buf, 4, s, sizeof(s)), 4u); // 長さ 0 の文字列
+    for (size_t len = 0; len < 8; ++len) CHECK_EQ(opcua_decode_tcp_header(buf, len, &th), 0u);
+    for (size_t len = 0; len < 32; ++len) CHECK_EQ(opcua_decode_hello(buf, len, &hello), 0u);
+    for (size_t len = 0; len < 28; ++len) CHECK_EQ(opcua_decode_ack(buf, len, &ack), 0u);
+    // 1 バイトちょうどで足りる型 (Null の Variant / DataValue) は長さ 1 で復号できる
+    buf[0] = 0x00;
+    CHECK_EQ(opcua_decode_variant(buf, 1, &v), 1u);
+    CHECK_EQ(opcua_decode_datavalue(buf, 1, &dv), 1u);
+    // 符号化側: 容量 0 / ちょうど
+    opcua_variant_t nullv = var(OPCUA_TYPE_NULL);
+    CHECK_EQ(opcua_encode_variant(&nullv, buf, 0), 0u);
+    CHECK_EQ(opcua_encode_variant(&nullv, buf, 1), 1u);
+    opcua_nodeid_t id = num_id(0, 1);
+    CHECK_EQ(opcua_encode_nodeid(&id, buf, 0), 0u);
+    opcua_datavalue_t d0;
+    std::memset(&d0, 0, sizeof(d0));
+    d0.value = nullv;
+    CHECK_EQ(opcua_encode_datavalue(&d0, buf, 0), 0u);
+    CHECK_EQ(opcua_encode_datavalue(&d0, buf, 1), 0u); // マスク 1 バイト + Null の Variant 1 バイト = 2 が必要
+    CHECK_EQ(opcua_encode_datavalue(&d0, buf, 2), 2u);
+    opcua_ack_message_t a0{};
+    CHECK_EQ(opcua_encode_ack(&a0, buf, 0), 0u);
+    opcua_hello_message_t h0;
+    std::memset(&h0, 0, sizeof(h0));
+    CHECK_EQ(opcua_encode_hello(&h0, buf, 0), 0u);
+    CHECK_EQ(opcua_encode_hello(&h0, buf, 32), 32u); // 空の URL ならちょうど 32 バイト
+    CHECK_EQ(opcua_encode_error(1, nullptr, buf, 0), 0u);
+    CHECK_EQ(opcua_encode_string("", buf, 0), 0u);
+    CHECK_EQ(opcua_encode_tcp_header(nullptr, buf, 8), 0u);
+}
+
+TEST_CASE(nodeid_format_boundaries_need_exactly_their_size) {
+    uint8_t b[16];
+    // 形式が切り替わる境界の値は、その形式の大きさの容量で符号化できる
+    opcua_nodeid_t t255 = num_id(0, 255), f256 = num_id(0, 256), f65535 = num_id(0, 65535), n255 = num_id(255, 1),
+                   n256 = num_id(256, 1), big = num_id(0, 65536);
+    CHECK_EQ(opcua_encode_nodeid(&t255, b, 2), 2u);    // two-byte
+    CHECK_EQ(opcua_encode_nodeid(&f256, b, 4), 4u);    // four-byte
+    CHECK_EQ(opcua_encode_nodeid(&f256, b, 3), 0u);
+    CHECK_EQ(opcua_encode_nodeid(&f65535, b, 4), 4u);  // four-byte の最大値
+    CHECK_EQ(opcua_encode_nodeid(&n255, b, 4), 4u);    // 名前空間 255 も four-byte
+    CHECK_EQ(opcua_encode_nodeid(&n256, b, 7), 7u);    // 名前空間 256 は numeric
+    CHECK_EQ(opcua_encode_nodeid(&n256, b, 6), 0u);
+    CHECK_EQ(opcua_encode_nodeid(&big, b, 7), 7u);     // 65536 は numeric
+    CHECK_EQ(opcua_encode_nodeid(&big, b, 6), 0u);
+    opcua_nodeid_t s = str_id(1, "ab");
+    CHECK_EQ(opcua_encode_nodeid(&s, b, 9), 9u);
+    CHECK_EQ(opcua_encode_nodeid(&s, b, 7), 0u);
+    CHECK_EQ(opcua_encode_nodeid(&s, b, 8), 0u);
+}
+
+TEST_CASE(long_names_are_truncated_and_terminated) {
+    const std::string longname(200, 'n');
+    opcua_server_t s;
+    opcua_server_init(&s, nullptr);
+    opcua_nodeid_t id = num_id(1, 1);
+    opcua_variant_t v = int32_var(1);
+    CHECK(opcua_server_add_variable(&s, &id, longname.c_str(), &v, 3));
+    CHECK_EQ(std::strlen(s.nodes[0].browse_name.name), (size_t)(OPCUA_MAX_STRING_LEN - 1));
+    CHECK_EQ(std::strlen(s.nodes[0].display_name.text), (size_t)(OPCUA_MAX_STRING_LEN - 1));
+    CHECK_EQ(s.nodes[0].browse_name.namespace_index, 1u);
+    opcua_datavalue_t out;
+    CHECK_EQ(opcua_server_process_read(&s, &id, OPCUA_ATTR_DISPLAY_NAME, &out), OPCUA_STATUS_GOOD);
+    CHECK_EQ(std::strlen(out.value.value.string_val), (size_t)(OPCUA_MAX_STRING_LEN - 1));
+}
+
+TEST_CASE(server_edge_cases) {
+    // 満杯のアドレス空間で、存在しない NodeId を探しても範囲外を読まない
+    opcua_server_t full;
+    opcua_server_init(&full, nullptr);
+    opcua_variant_t v = int32_var(1);
+    for (uint32_t i = 0; i < OPCUA_MAX_NODES; ++i) {
+        opcua_nodeid_t n = num_id(1, i);
+        opcua_server_add_variable(&full, &n, "n", &v, 3);
+    }
+    opcua_nodeid_t missing = num_id(9, 9);
+    opcua_datavalue_t out;
+    CHECK(!opcua_server_read_value(&full, &missing, &out));
+    CHECK_EQ(opcua_server_process_read(&full, &missing, OPCUA_ATTR_VALUE, &out), OPCUA_STATUS_BAD_NODE_ID_UNKNOWN);
+
+    // MSG: 応答バッファがちょうど 8 バイトでも、ノードがなければヘッダだけを返せる
+    opcua_server_t empty;
+    opcua_server_init(&empty, nullptr);
+    const Bytes req = cat({Bytes{'M', 'S', 'G', 'F'}, u32(8)});
+    uint8_t resp[16];
+    CHECK_EQ(opcua_server_process_tcp_message(&empty, req.data(), req.size(), resp, 8), 8u);
+    CHECK_EQ(opcua_server_process_tcp_message(&empty, req.data(), req.size(), resp, 7), 0u);
+    // 受信長が 8 バイトちょうどのメッセージも扱える (最小のヘッダ)
+    CHECK_EQ(opcua_server_process_tcp_message(&empty, req.data(), 8, resp, sizeof(resp)), 8u);
+    // 宣言長が実際より短い
+    Bytes shorter = req;
+    shorter.push_back(0);
+    CHECK_EQ(opcua_server_process_tcp_message(&empty, shorter.data(), shorter.size(), resp, sizeof(resp)), 0u);
+    // 文字列 NodeId の NodeId 属性
+    opcua_server_t s;
+    opcua_server_init(&s, nullptr);
+    opcua_nodeid_t sid = str_id(1, "Pump/Speed");
+    opcua_server_add_variable(&s, &sid, "Speed", &v, 3);
+    CHECK_EQ(opcua_server_process_read(&s, &sid, OPCUA_ATTR_NODE_ID, &out), OPCUA_STATUS_GOOD);
+    CHECK_EQ(out.value.type, OPCUA_TYPE_STRING);
+    CHECK(std::string(out.value.value.string_val) == "Pump/Speed");
+}
+
 EMBED_TEST_MAIN()
