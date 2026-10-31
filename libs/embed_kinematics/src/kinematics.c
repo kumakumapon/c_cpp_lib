@@ -2,6 +2,7 @@
 #include <math.h>
 
 #define EPSILON 0.00001f
+#define REACH_TOLERANCE 0.00001f
 
 /* ---------------------------------------------------------
  * 差動2輪 (Differential Drive)
@@ -41,15 +42,15 @@ void diff_drive_odometry_update(pose2d_t *pose, float d_left, float d_right, flo
     float d_center = 0.5f * (d_right + d_left);
     float d_theta = (d_right - d_left) / track_width;
 
-    if (fabsf(d_theta) < 0.0001f) {
-        // 直進近似 (Runge-Kutta 1次)
-        pose->x += d_center * cosf(pose->theta + 0.5f * d_theta);
-        pose->y += d_center * sinf(pose->theta + 0.5f * d_theta);
-    } else {
-        // 円弧近似
-        pose->x += d_center * cosf(pose->theta + 0.5f * d_theta);
-        pose->y += d_center * sinf(pose->theta + 0.5f * d_theta);
+    float half = 0.5f * d_theta;
+    float step = d_center;
+    if (fabsf(d_theta) >= 0.0001f) {
+        // 円弧: 始点と終点を結ぶ弦の長さは 2R sin(dθ/2) = d_center * sin(dθ/2) / (dθ/2)
+        step = d_center * sinf(half) / half;
     }
+    // 弦は始点と終点の方位の中間を向く
+    pose->x += step * cosf(pose->theta + half);
+    pose->y += step * sinf(pose->theta + half);
 
     pose->theta += d_theta;
 
@@ -115,9 +116,13 @@ bool arm2dof_inverse(const arm2dof_params_t *params, float x, float y, bool elbo
     float r2 = (x * x) + (y * y);
     float cos_q2 = (r2 - (l1 * l1) - (l2 * l2)) / (2.0f * l1 * l2);
 
-    if (cos_q2 < -1.0f || cos_q2 > 1.0f) {
+    /* 限界ちょうどの点が丸め誤差で外れないよう、わずかな超過は限界に丸める。
+     * 比較を否定形にしているので、リンク長 0 (0/0 = NaN や ±inf) や NaN の入力は拒否される */
+    if (!(cos_q2 >= -1.0f - REACH_TOLERANCE && cos_q2 <= 1.0f + REACH_TOLERANCE)) {
         return false; // 到達不能点 (Workspace外)
     }
+    if (cos_q2 > 1.0f) cos_q2 = 1.0f;
+    if (cos_q2 < -1.0f) cos_q2 = -1.0f;
 
     float sin_q2 = sqrtf(1.0f - (cos_q2 * cos_q2));
     if (!elbow_up) {

@@ -526,5 +526,119 @@
     "line": "strncpy(st->name, name, sizeof(st->name) - 1);",
     "change": "- -> +",
     "reason": "1 バイト多くコピーされる先は構造体のパディングで、読み出す手段がない (直後の終端処理で文字列としては同じ)"
+  },
+  {
+    "file": "libs/embed_ringbuf/src/embed_ringbuf.c",
+    "line": "if (!rb || !dest || max_length == 0)",
+    "change": "|| -> &&",
+    "reason": "dest が NULL のまま進んでも、embed_ringbuf_get が NULL の出力先を拒否して 0 件になる"
+  },
+  {
+    "file": "libs/embed_kinematics/src/kinematics.c",
+    "line": "if (!(cos_q2 >= -1.0f - REACH_TOLERANCE && cos_q2 <= 1.0f + REACH_TOLERANCE)) {",
+    "change": ">= -> >",
+    "reason": "許容誤差 1e-5 ちょうどの浮動小数点値は実質到達しない境界で、前後の値で結果が連続"
+  },
+  {
+    "file": "libs/embed_kinematics/src/kinematics.c",
+    "line": "if (!(cos_q2 >= -1.0f - REACH_TOLERANCE && cos_q2 <= 1.0f + REACH_TOLERANCE)) {",
+    "change": "<= -> <",
+    "reason": "許容誤差 1e-5 ちょうどの浮動小数点値は実質到達しない境界で、前後の値で結果が連続"
+  },
+  {
+    "file": "libs/embed_kinematics/src/kinematics.c",
+    "line": "if (cos_q2 > 1.0f) cos_q2 = 1.0f;",
+    "change": "> -> >=",
+    "reason": "等しいときにどちらの分岐を通っても同じ値になる"
+  },
+  {
+    "file": "libs/embed_kinematics/src/kinematics.c",
+    "line": "if (cos_q2 < -1.0f) cos_q2 = -1.0f;",
+    "change": "< -> <=",
+    "reason": "等しいときにどちらの分岐を通っても同じ値になる"
+  },
+  {
+    "file": "libs/embed_kinematics/src/kinematics.c",
+    "line": "if (fabsf(d_theta) >= 0.0001f) {",
+    "change": ">= -> >",
+    "reason": "境界の dθ では弦と弧長の差が 1e-9 以下で、結果が区別できない"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "if (q > 0x40000000u)",
+    "change": "> -> >=",
+    "reason": "q == 0x40000000 のとき 0x80000000 - q も同じ値"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "if (i < 256)",
+    "change": "< -> <=",
+    "reason": "i == 256 (区間の終端) では補間係数が 0 なので加算量は 0。テーブルの範囲外を読むだけで値は変わらない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "uint64_t ax = x < 0 ? -(int64_t)x : x, ay = y < 0 ? -(int64_t)y : y;",
+    "change": "< -> <=",
+    "reason": "0 の符号反転は 0 のままで同じ値"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "uint64_t lo = ax < ay ? ax : ay, hi = ax > ay ? ax : ay;",
+    "change": "< -> <=",
+    "reason": "ax == ay のとき lo も hi も同じ値"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "uint64_t lo = ax < ay ? ax : ay, hi = ax > ay ? ax : ay;",
+    "change": "> -> >=",
+    "reason": "ax == ay のとき lo も hi も同じ値"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "if (ay > ax)",
+    "change": "> -> >=",
+    "reason": "ax == ay のとき atan(1) = π/4 で π/2 - π/4 と同じ値"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "if (x < 0)",
+    "change": "< -> <=",
+    "reason": "x == 0 のとき π - π/2 = π/2 で、通さない場合と同じ値"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "if (y < 0)",
+    "change": "< -> <=",
+    "reason": "y == 0 のとき 0 の符号反転は 0、π の符号反転は同じ位相 (-1)"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "if (x <= 0)",
+    "change": "<= -> <",
+    "reason": "x == 0 のとき平方根の計算結果も 0"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "return x > INT32_MAX ? INT32_MAX : x < INT32_MIN ? INT32_MIN : (int32_t)x;",
+    "change": "< -> <=",
+    "reason": "境界ちょうどの値は飽和値と一致する"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "return x > INT32_MAX ? INT32_MAX : x < INT32_MIN ? INT32_MIN : (int32_t)x;",
+    "change": "> -> >=",
+    "reason": "境界ちょうどの値は飽和値と一致する"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "return x > INT16_MAX ? INT16_MAX : x < INT16_MIN ? INT16_MIN : (int16_t)x;",
+    "change": "< -> <=",
+    "reason": "境界ちょうどの値は飽和値と一致する"
+  },
+  {
+    "file": "libs/embed_fixed/src/embed_fixed.c",
+    "line": "return x > INT16_MAX ? INT16_MAX : x < INT16_MIN ? INT16_MIN : (int16_t)x;",
+    "change": "> -> >=",
+    "reason": "境界ちょうどの値は飽和値と一致する"
   }
 ]

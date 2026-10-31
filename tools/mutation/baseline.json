@@ -30,9 +30,9 @@
     "valid": 69
   },
   "embed_fixed": {
-    "rate": 0.55,
-    "killed": 22,
-    "valid": 40
+    "rate": 1.0,
+    "killed": 25,
+    "valid": 25
   },
   "embed_fsm": {
     "rate": 1.0,
@@ -45,9 +45,9 @@
     "valid": 81
   },
   "embed_kinematics": {
-    "rate": 0.4444,
-    "killed": 28,
-    "valid": 63
+    "rate": 1.0,
+    "killed": 60,
+    "valid": 60
   },
   "embed_log": {
     "rate": 1.0,
@@ -90,9 +90,9 @@
     "valid": 33
   },
   "embed_ringbuf": {
-    "rate": 0.4722,
-    "killed": 17,
-    "valid": 36
+    "rate": 1.0,
+    "killed": 34,
+    "valid": 34
   },
   "embed_sched": {
     "rate": 0.4857,
