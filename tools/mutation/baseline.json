@@ -70,9 +70,9 @@
     "valid": 80
   },
   "embed_mqtt": {
-    "rate": 0.4375,
-    "killed": 35,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 219,
+    "valid": 219
   },
   "embed_opcua": {
     "rate": 0.3375,
