@@ -184,6 +184,7 @@ TEST_CASE(encapsulation_header_bytes_are_little_endian) {
 
 TEST_CASE(register_session_response_bytes) {
     uint8_t buf[64];
+    std::memset(buf, 0xEE, sizeof(buf)); // 書き残しがあれば 0xEE が残る
     CHECK_EQ(eip_build_register_session_resp(0x00001234, kCtx, buf, sizeof(buf)), 28u);
     CHECK_BYTES(Bytes(buf, buf + 28), 0x65, 0x00, 0x04, 0x00, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00);
@@ -660,6 +661,42 @@ TEST_CASE(output_buffer_smaller_than_a_header_is_never_written) {
     CHECK_EQ(small[0], 0xEE);
     CHECK_EQ(eip_adapter_process_packet(&d.a, bad.data(), bad.size(), small, 24), 24u);
     CHECK_EQ(small[24], 0xEE);
+}
+
+TEST_CASE(boundary_cases_for_parsing) {
+    // プロトコルバージョンは 16 ビット全体を見る
+    eip_adapter_t a;
+    eip_adapter_init(&a, nullptr);
+    CHECK_EQ(parse(process(a, encap(EIP_CMD_REGISTER_SESSION, 0, {0x01, 0x01, 0x00, 0x00}))).h.status,
+             (uint32_t)EIP_STATUS_UNSUPPORTED_VER);
+
+    // 長さ 0 のデータアイテムだけの CPF (最小の 16 バイト) も解析できる
+    const uint8_t *d = nullptr;
+    size_t n = 99;
+    const Bytes empty = cpf({});
+    CHECK_EQ(empty.size(), 16u);
+    // cpf() は CIP データが空のとき 0 長のアイテムを作る
+    CHECK(eip_parse_send_rr_data(empty.data(), empty.size(), &d, &n));
+    CHECK_EQ(n, 0u);
+
+    // 16 ビットのセグメントが末尾にあっても読める (クラス / インスタンス / 属性のどれが最後でも)
+    cip_epath_t p;
+    const uint8_t cls_last[] = {0x24, 0x01, 0x30, 0x01, 0x21, 0x00, 0x02, 0x01};
+    CHECK_EQ(cip_decode_epath(cls_last, sizeof(cls_last), &p), 8u);
+    CHECK_EQ(p.class_id, 0x0102u);
+    const uint8_t inst_last[] = {0x20, 0x01, 0x30, 0x01, 0x25, 0x00, 0x04, 0x03};
+    CHECK_EQ(cip_decode_epath(inst_last, sizeof(inst_last), &p), 8u);
+    CHECK_EQ(p.instance_id, 0x0304u);
+    const uint8_t attr_last[] = {0x20, 0x01, 0x24, 0x01, 0x31, 0x00, 0x06, 0x05};
+    CHECK_EQ(cip_decode_epath(attr_last, sizeof(attr_last), &p), 8u);
+    CHECK_EQ(p.attribute_id, 0x0506u);
+    // 8 ビットのセグメントが末尾の場合も同様
+    const uint8_t cls8_last[] = {0x24, 0x01, 0x30, 0x01, 0x20, 0x07};
+    CHECK_EQ(cip_decode_epath(cls8_last, sizeof(cls8_last), &p), 6u);
+    CHECK_EQ(p.class_id, 7u);
+    const uint8_t inst8_last[] = {0x20, 0x01, 0x30, 0x01, 0x24, 0x09};
+    CHECK_EQ(cip_decode_epath(inst8_last, sizeof(inst8_last), &p), 6u);
+    CHECK_EQ(p.instance_id, 9u);
 }
 
 EMBED_TEST_MAIN()
