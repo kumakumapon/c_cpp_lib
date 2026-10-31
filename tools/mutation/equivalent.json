@@ -466,5 +466,107 @@
     "line": "if (curr->size > stats->max_free_block) {",
     "change": "> -> >=",
     "reason": "同じ値を代入するだけ"
+  },
+  {
+    "file": "libs/uitron/src/uitron_sem.c",
+    "line": "if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {",
+    "change": "&& -> ||",
+    "reason": "待ち状態でないタスクは tskwait が必ず 0 (待ちの解除で必ず 0 に戻す不変条件) なので、後段の比較で同じ結果になる冗長な条件"
+  },
+  {
+    "file": "libs/uitron/src/uitron_flg.c",
+    "line": "if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {",
+    "change": "&& -> ||",
+    "reason": "待ち状態でないタスクは tskwait が必ず 0 (待ちの解除で必ず 0 に戻す不変条件) なので、後段の比較で同じ結果になる冗長な条件"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mbx.c",
+    "line": "if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {",
+    "change": "&& -> ||",
+    "reason": "待ち状態でないタスクは tskwait が必ず 0 (待ちの解除で必ず 0 に戻す不変条件) なので、後段の比較で同じ結果になる冗長な条件"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {",
+    "change": "&& -> ||",
+    "reason": "待ち状態でないタスクは tskwait が必ず 0 (待ちの解除で必ず 0 に戻す不変条件) なので、後段の比較で同じ結果になる冗長な条件"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {",
+    "change": "&& -> ||",
+    "reason": "待ち状態でないタスクは tskwait が必ず 0 (待ちの解除で必ず 0 に戻す不変条件) なので、後段の比較で同じ結果になる冗長な条件"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "if (!tcb->is_created || (tcb->tskstat != TTS_WAI && tcb->tskstat != TTS_WAS)) continue;",
+    "change": "|| -> &&",
+    "reason": "待ち状態でないタスクは tskwait が必ず 0 (待ちの解除で必ず 0 に戻す不変条件) なので、後段の比較で同じ結果になる冗長な条件"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "if (tcb->tskpri < best->tskpri) best = tcb;",
+    "change": "< -> <=",
+    "reason": "直前の条件で優先度が異なると分かっているので、等しい場合は通らない"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "} else if (tcb->wait_seq < best->wait_seq) {",
+    "change": "< -> <=",
+    "reason": "待ち順序の番号は一意で、等しいタスクは存在しない"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "if (g_kcb.cur_tskid != TSK_SELF && g_kcb.cur_tskid != best_tskid) {",
+    "change": "&& -> ||",
+    "reason": "実行状態のタスクがない (TSK_SELF) ときは、そのタスクが RUN でないので降格処理の結果が変わらない"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "if (tcb->lefttmo != TMO_FEVR && tcb->lefttmo > 0) {",
+    "change": "> -> >=",
+    "reason": "lefttmo == 0 で待ちに入ることはない (ポーリングは待たずに戻る)"
+  },
+  {
+    "file": "libs/uitron/src/uitron_core.c",
+    "line": "if (tskid <= 0 || tskid > UITRON_MAX_TSKID) {",
+    "change": "<= -> <",
+    "reason": "tcbs[0] は生成されないので、ID 0 は範囲外と同じく NULL を返す"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "if (pcb->fblkcnt > 0 && pcb->free_list) {",
+    "change": "&& -> ||",
+    "reason": "空きブロック数と空きリストの先頭は連動していて、どちらかだけが 0 になることはない"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "if (pcb->fblkcnt > 0 && pcb->free_list) {",
+    "change": "> -> >=",
+    "reason": "空きブロック数と空きリストの先頭は連動していて、どちらかだけが 0 になることはない"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "uint8_t *next = (i + 1 < pk_cmpf->blkcnt) ? (mem + ((i + 1) * actual_blksz)) : NULL;",
+    "change": "< -> <=",
+    "reason": "最後のブロックの次ポインタは、空きブロック数が 0 のときは読まれない"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "for (UINT i = 0; i < pk_cmpf->blkcnt; ++i) {",
+    "change": "< -> <=",
+    "reason": "領域の 1 ブロック先を初期化するだけで、範囲外書き込み以外の違いがない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "static uint8_t s_mpf_fallback_pool[UITRON_MAX_MPFID + 1][2048];",
+    "change": "+ -> -",
+    "reason": "配列が 1 つ小さくなるだけで、最大 ID のプールで範囲外になる (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/uitron/src/uitron_mpf.c",
+    "line": "if (actual_blksz < sizeof(void*)) {",
+    "change": "< -> <=",
+    "reason": "切り上げ後のサイズは常にポインタ幅以上で、この分岐には入らない"
   }
 ]

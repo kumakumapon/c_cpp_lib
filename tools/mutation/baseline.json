@@ -110,8 +110,8 @@
     "valid": 16
   },
   "uitron": {
-    "rate": 0.3375,
-    "killed": 27,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 236,
+    "valid": 236
   }
 }
