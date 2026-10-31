@@ -5,7 +5,10 @@
  * タスク管理機能
  * --------------------------------------------------------- */
 ER cre_tsk(ID tskid, const T_CTSK *pk_ctsk) {
-    if (tskid <= 0 || tskid > UITRON_MAX_TSKID || !pk_ctsk) {
+    if (tskid <= 0 || tskid > UITRON_MAX_TSKID) {
+        return E_ID;
+    }
+    if (!pk_ctsk) {
         return E_PAR;
     }
     if (pk_ctsk->itskpri <= 0 || pk_ctsk->itskpri > UITRON_MAX_PRI) {
@@ -36,7 +39,7 @@ ER cre_tsk(ID tskid, const T_CTSK *pk_ctsk) {
 
 ER del_tsk(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat != TTS_DMT) return E_OBJ;
 
     tcb->is_created = FALSE;
@@ -45,7 +48,7 @@ ER del_tsk(ID tskid) {
 
 ER act_tsk(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
 
     if (tcb->tskstat == TTS_DMT) {
         tcb->tskstat = TTS_RDY;
@@ -66,7 +69,7 @@ ER iact_tsk(ID tskid) {
 
 ER_UINT can_act(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
 
     UINT prev_cnt = tcb->actcnt;
     tcb->actcnt = 0;
@@ -108,7 +111,7 @@ void exd_tsk(void) {
 
 ER ter_tsk(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat == TTS_DMT) return E_OBJ;
 
     terminate_and_requeue(tcb);
@@ -118,7 +121,8 @@ ER ter_tsk(ID tskid) {
 
 ER chg_pri(ID tskid, PRI tskpri) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
+    if (tcb->tskstat == TTS_DMT) return E_OBJ;
     if (tskpri != 0 && (tskpri < 1 || tskpri > UITRON_MAX_PRI)) return E_PAR;
 
     if (tskpri == 0) {
@@ -134,7 +138,7 @@ ER chg_pri(ID tskid, PRI tskpri) {
 ER get_pri(ID tskid, PRI *p_tskpri) {
     if (!p_tskpri) return E_PAR;
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat == TTS_DMT) return E_OBJ;
 
     *p_tskpri = tcb->tskpri;
@@ -144,7 +148,7 @@ ER get_pri(ID tskid, PRI *p_tskpri) {
 ER ref_tsk(ID tskid, T_RTSK *pk_rtsk) {
     if (!pk_rtsk) return E_PAR;
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
 
     pk_rtsk->tskstat = tcb->tskstat;
     pk_rtsk->tskpri  = tcb->tskpri;
@@ -185,10 +189,11 @@ ER tslp_tsk(TMO tmout) {
 
 ER wup_tsk(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat == TTS_DMT) return E_OBJ;
 
-    if (tcb->tskstat == TTS_WAI && tcb->tskwait == TTW_SLP) {
+    /* 起床待ちなら起こす。二重待ち状態 (起床待ち + 強制待ち) でも待ちは解除し、強制待ちだけが残る */
+    if ((tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS) && tcb->tskwait == TTW_SLP) {
         uitron_task_wakeup(tcb, E_OK);
         uitron_reschedule();
     } else {
@@ -207,7 +212,8 @@ ER iwup_tsk(ID tskid) {
 
 ER_UINT can_wup(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
+    if (tcb->tskstat == TTS_DMT) return E_OBJ;
 
     UINT prev = tcb->wupcnt;
     tcb->wupcnt = 0;
@@ -216,7 +222,7 @@ ER_UINT can_wup(ID tskid) {
 
 ER rel_wai(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat != TTS_WAI && tcb->tskstat != TTS_WAS) return E_OBJ;
 
     if (tcb->tskstat == TTS_WAI) {
@@ -237,7 +243,7 @@ ER irel_wai(ID tskid) {
 
 ER sus_tsk(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat == TTS_DMT) return E_OBJ;
 
     if (tcb->tskstat == TTS_RUN || tcb->tskstat == TTS_RDY) {
@@ -259,7 +265,7 @@ ER sus_tsk(ID tskid) {
 
 ER rsm_tsk(ID tskid) {
     TCB *tcb = uitron_get_tcb(tskid);
-    if (!tcb) return E_NOEXS;
+    if (!tcb) return uitron_tsk_noexist(tskid);
     if (tcb->tskstat != TTS_SUS && tcb->tskstat != TTS_WAS) return E_OBJ;
 
     tcb->suscnt--;

@@ -11,7 +11,10 @@ static BOOL check_flg_cond(UINT cur_ptn, UINT waiptn, MODE wfmode) {
 }
 
 ER cre_flg(ID flgid, const T_CFLG *pk_cflg) {
-    if (flgid <= 0 || flgid > UITRON_MAX_FLGID || !pk_cflg) {
+    if (flgid <= 0 || flgid > UITRON_MAX_FLGID) {
+        return E_ID;
+    }
+    if (!pk_cflg) {
         return E_PAR;
     }
 
@@ -102,7 +105,8 @@ ER pol_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn) {
 }
 
 ER twai_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn, TMO tmout) {
-    if (flgid <= 0 || flgid > UITRON_MAX_FLGID || waiptn == 0) return E_PAR;
+    if (flgid <= 0 || flgid > UITRON_MAX_FLGID) return E_ID;
+    if (waiptn == 0) return E_PAR;
     FCB *fcb = &g_kcb.fcbs[flgid];
     if (!fcb->is_created) return E_NOEXS;
 
@@ -123,6 +127,12 @@ ER twai_flg(ID flgid, UINT waiptn, MODE wfmode, UINT *p_flgptn, TMO tmout) {
     TCB *cur = uitron_get_tcb(uitron_caller_tskid());
     if (!cur) return E_CTX;
 
+    /* TA_WSGL のイベントフラグは待ちタスクを 1 つしか持てない */
+    if (!(fcb->cflg.flgatr & TA_WMUL) &&
+        uitron_pick_waiter(TTW_FLG, flgid, FALSE) != NULL) {
+        return E_ILUSE;
+    }
+
     cur->waiptn = waiptn;
     cur->wfmode = wfmode;
     cur->p_flgptn = p_flgptn;
@@ -139,16 +149,8 @@ ER ref_flg(ID flgid, T_RFLG *pk_rflg) {
     if (!fcb->is_created) return E_NOEXS;
 
     pk_rflg->flgptn = fcb->flgptn;
-    pk_rflg->wtskid = TSK_SELF;
-
-    for (ID id = 1; id <= UITRON_MAX_TSKID; ++id) {
-        TCB *tcb = &g_kcb.tcbs[id];
-        if (tcb->is_created && (tcb->tskstat == TTS_WAI || tcb->tskstat == TTS_WAS)) {
-            if (tcb->tskwait == TTW_FLG && tcb->wid == flgid) {
-                pk_rflg->wtskid = id;
-                break;
-            }
-        }
-    }
+    /* 待ち行列の先頭 (待ちに入った順) */
+    TCB *head = uitron_pick_waiter(TTW_FLG, flgid, FALSE);
+    pk_rflg->wtskid = head ? head->tskid : TSK_SELF;
     return E_OK;
 }

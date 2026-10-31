@@ -34,6 +34,13 @@ TCB *uitron_get_tcb(ID tskid) {
     return tcb->is_created ? tcb : NULL;
 }
 
+ER uitron_tsk_noexist(ID tskid) {
+    if (tskid <= 0 || tskid > UITRON_MAX_TSKID) {
+        return E_ID; /* 範囲外、または TSK_SELF を呼出元のタスクなしで指定した */
+    }
+    return E_NOEXS;
+}
+
 void uitron_task_ready(TCB *tcb) {
     if (!tcb) return;
     tcb->tskstat = TTS_RDY;
