@@ -3,13 +3,13 @@ add_executable(test_path
     test_path.cpp
 )
 
-target_link_libraries(test_path
-    PRIVATE
-        embed_path
+# 経路の妥当性・最短性と純追跡の数式を固定するテスト
+add_executable(test_path_spec
+    test_path_spec.cpp
 )
 
-target_set_warnings(test_path)
-
-add_test(NAME test_path COMMAND test_path)
-
-target_link_libraries(test_path PRIVATE embed_test)
+foreach(t test_path test_path_spec)
+    target_link_libraries(${t} PRIVATE embed_path embed_test)
+    target_set_warnings(${t})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()
