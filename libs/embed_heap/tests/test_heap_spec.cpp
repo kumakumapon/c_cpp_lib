@@ -594,7 +594,7 @@ TEST_CASE(realloc_grow_in_place_when_next_is_free) {
     CHECK_EQ(e.free_blocks(), 1u);
     check_consistent(e);
 
-    // ちょうど後続の空きを使い切る拡張 (余りが分割に足りない)
+    // 後続の空きをほぼ使い切る拡張 (余りがヘッダ分だけで分割に足りない)
     const size_t total_payload = e.stats().used_size + e.stats().free_size + e.H;
     void *r2 = embed_heap_realloc(&e.h, r, total_payload - e.H);
     CHECK(r2 == r);
@@ -641,6 +641,102 @@ TEST_CASE(realloc_failure_keeps_original) {
     // 元のブロックは有効なまま解放できる
     embed_heap_free(&e.h, a);
     CHECK_EQ(e.stats().alloc_count, before.alloc_count - 1);
+}
+
+
+TEST_CASE(free_ignores_fake_headers_around_the_heap) {
+    // ヒープの手前・末尾直後・揃っていない位置に「それらしい」ヘッダを置いても、解放は無視される
+    Env probe;
+    const size_t H = probe.H;
+    alignas(64) static uint8_t mem[4096];
+    std::memset(mem, 0, sizeof(mem));
+    embed_heap_block_t fake;
+    std::memset(&fake, 0, sizeof(fake));
+    fake.magic = EMBED_HEAP_MAGIC;
+    fake.size = 8;
+    fake.is_free = false;
+
+    const size_t off = 128;
+    const size_t size = 1024;
+    embed_heap_t h;
+    REQUIRE(embed_heap_init(&h, mem + off, size));
+    // (1) 先頭ポインタの直前 (ヒープの外側)
+    std::memcpy(mem + off - H, &fake, sizeof(fake));
+    embed_heap_free(&h, h.buffer);
+    CHECK_EQ(h.total_free_ops, 0u);
+    CHECK(embed_heap_realloc(&h, h.buffer, 16) == nullptr);
+    CHECK(!reinterpret_cast<embed_heap_block_t *>(mem + off - H)->is_free);
+
+    // 全域を使い切って、末尾直後ポインタの手前 (最後のブロックの内側) に偽ヘッダを置く
+    void *all = embed_heap_alloc(&h, size - H);
+    REQUIRE(all != nullptr);
+    std::memcpy(h.buffer + size - H, &fake, sizeof(fake));
+    embed_heap_free(&h, h.buffer + size); // ヒープ末尾の外
+    CHECK_EQ(h.total_free_ops, 0u);
+    CHECK(!reinterpret_cast<embed_heap_block_t *>(h.buffer + size - H)->is_free);
+
+    // (2) 境界に揃っていないポインタ
+    std::memcpy((uint8_t *)all + 61, &fake, sizeof(fake));
+    embed_heap_free(&h, (uint8_t *)all + 61 + H);
+    CHECK_EQ(h.total_free_ops, 0u);
+    CHECK(embed_heap_realloc(&h, (uint8_t *)all + 61 + H, 16) == nullptr);
+    CHECK_EQ(h.total_free_ops, 0u);
+}
+
+TEST_CASE(realloc_split_threshold_exact) {
+    Env e;
+    const size_t H = e.H;
+    // 縮小: 余りがちょうど ヘッダ + 最小ペイロード なら分割する
+    void *a = embed_heap_alloc(&e.h, 256);
+    void *b = embed_heap_alloc(&e.h, 64);
+    REQUIRE(b != nullptr);
+    CHECK(embed_heap_realloc(&e.h, a, 256 - (H + kDefaultAlign)) == a);
+    std::vector<Block> bl = blocks_of(e.h);
+    CHECK(bl[1].free);
+    CHECK_EQ(bl[1].payload, kDefaultAlign);
+    check_consistent(e);
+
+    // 拡張 (後続の空きに収める): 余りがちょうど ヘッダ + 最小ペイロード なら再分割する
+    Env g;
+    void *p = embed_heap_alloc(&g.h, 64);
+    void *x = embed_heap_alloc(&g.h, 128);
+    void *c = embed_heap_alloc(&g.h, 64);
+    REQUIRE(c != nullptr);
+    embed_heap_free(&g.h, x);
+    const size_t combined = 64 + H + 128;
+    CHECK(embed_heap_realloc(&g.h, p, combined - (H + kDefaultAlign)) == p);
+    bl = blocks_of(g.h);
+    CHECK_EQ(bl[0].payload, combined - (H + kDefaultAlign));
+    CHECK(bl[1].free);
+    CHECK_EQ(bl[1].payload, kDefaultAlign);
+    check_consistent(g);
+
+    // 拡張: 後続の空きをちょうど使い切る (結合後のサイズと要求が等しい)
+    Env k;
+    void *q = embed_heap_alloc(&k.h, 64);
+    void *y = embed_heap_alloc(&k.h, 128);
+    void *z = embed_heap_alloc(&k.h, 64);
+    REQUIRE(z != nullptr);
+    embed_heap_free(&k.h, y);
+    CHECK(embed_heap_realloc(&k.h, q, combined) == q);
+    CHECK_EQ(k.free_blocks(), 1u); // 手前の空きは消え、末尾の空きだけが残る
+    CHECK_EQ(blocks_of(k.h)[0].payload, combined);
+    check_consistent(k);
+}
+
+TEST_CASE(dump_reports_buffer_range) {
+    Env e;
+    std::string out;
+    embed_heap_dump(&e.h, sink, &out);
+    const size_t at = out.find("Buffer: ");
+    REQUIRE(at != std::string::npos);
+    char *end1 = nullptr;
+    const unsigned long long lo = std::strtoull(out.c_str() + at + 8, &end1, 16);
+    const size_t dash = out.find(" - ", at);
+    REQUIRE(dash != std::string::npos);
+    const unsigned long long hi = std::strtoull(out.c_str() + dash + 3, nullptr, 16);
+    CHECK_EQ((unsigned long long)(uintptr_t)e.h.buffer, lo);
+    CHECK_EQ(hi - lo, (unsigned long long)sizeof(e.buf));
 }
 
 // ---- ロック ----
