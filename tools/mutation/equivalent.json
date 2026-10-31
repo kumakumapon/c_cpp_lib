@@ -904,5 +904,11 @@
     "line": "if (cip_len > 0xFFFF || cpf_len > 0xFFFF) return 0;",
     "change": "> -> >=",
     "reason": "cip_len == 0xFFFF のとき cpf_len も 0xFFFF を超えるので、直後の条件が同じく拒否する"
+  },
+  {
+    "file": "libs/embed_eip/src/eip_encap.c",
+    "line": "if (off + 4 > payload_len) return false;",
+    "change": "+ -> -",
+    "reason": "ヘッダを範囲外から読んでも、直後の item_len の境界検査 (off + item_len > payload_len) が false を返す (二重の検査)"
   }
 ]
