@@ -45,6 +45,7 @@ typedef enum {
     MQTT_QOS_0 = 0, /**< At most once (最大1回 / 配信保証なし) */
     MQTT_QOS_1 = 1, /**< At least once (最低1回 / ACK確認あり) */
     MQTT_QOS_2 = 2, /**< Exactly once (正確に1回 / 4ウェイハンドシェイク) */
+    MQTT_QOS_FAILURE = 0x80, /**< SUBACK の購読失敗 [MQTT-3.9.3]。発行・購読の QoS には指定できない */
 } mqtt_qos_t;
 
 /* ---------------------------------------------------------
