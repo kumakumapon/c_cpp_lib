@@ -367,4 +367,33 @@ TEST_CASE(unregistered_parent_is_tolerated) {
     CHECK_EQ(ctx.log.size(), 4u); // +1 ev1 -1 +2
 }
 
+TEST_CASE(cycle_dispatch_stops_after_state_limit) {
+    // 循環した親をたどる回数は状態数の上限 (FSM_MAX_STATES) でちょうど打ち切る
+    Ctx ctx;
+    embed_fsm::StateMachine m(&ctx);
+    m.add_state(1, 2, "a", nullptr, nullptr, on_event<1>);
+    m.add_state(2, 1, "b", nullptr, nullptr, on_event<2>);
+    m.start(1);
+    ctx.log.clear();
+    CHECK(!m.dispatch(5));
+    CHECK_EQ(ctx.log.size(), (size_t)FSM_MAX_STATES);
+}
+
+TEST_CASE(reserved_id_is_rejected_even_with_a_parent) {
+    embed_fsm::StateMachine m;
+    CHECK(m.add_state(1, FSM_STATE_NONE, "root"));
+    CHECK(!m.add_state(FSM_STATE_NONE, 1, "reserved"));
+    CHECK_EQ(m.raw_handle()->state_count, 1u);
+}
+
+TEST_CASE(state_name_is_always_terminated) {
+    fsm_machine_t raw;
+    fsm_init(&raw, nullptr);
+    raw.states[0].name[FSM_STATE_NAME_MAX - 1] = 'Q'; // 以前の内容が残っていても
+    const std::string longname(100, 'n');
+    fsm_add_state(&raw, 1, FSM_STATE_NONE, longname.c_str(), nullptr, nullptr, nullptr);
+    CHECK_EQ((int)raw.states[0].name[FSM_STATE_NAME_MAX - 1], 0);
+    CHECK_EQ(std::strlen(raw.states[0].name), (size_t)(FSM_STATE_NAME_MAX - 1));
+}
+
 EMBED_TEST_MAIN()
