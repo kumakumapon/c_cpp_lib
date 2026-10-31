@@ -31,7 +31,8 @@ TEST_CASE(init_validation) {
         CHECK_EQ(embed_ringbuf_free_space(&rb), 0u);
         CHECK_EQ(embed_ringbuf_write(&rb, st, 4), 0u);
     }
-    embed_ringbuf_init(&rb, nullptr, 8); // ストレージなし
+    embed_ringbuf_init(&rb, nullptr, 8); // ストレージなし: 容量も 0 になる
+    CHECK_EQ(rb.capacity, 0u);
     CHECK(!embed_ringbuf_put(&rb, 1));
     CHECK_EQ(embed_ringbuf_available(&rb), 0u);
     CHECK_EQ(embed_ringbuf_free_space(&rb), 0u);

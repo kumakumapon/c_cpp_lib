@@ -416,4 +416,25 @@ TEST_CASE(arm_inverse_rejects_degenerate_links_and_nan) {
     CHECK_NEAR(j.q1, 9.0f, 0.0f);
 }
 
+TEST_CASE(odometry_pi_boundary_is_kept) {
+    // 方位は (-π, π]: ちょうど +π はそのまま、ちょうど -π もそのまま (反対側へ折り返さない)
+    pose2d_t pose{0, 0, 3.14159265f};
+    diff_drive_odometry_update(&pose, 0.1f, 0.1f, 0.3f);
+    CHECK(pose.theta > 3.14f);
+    pose = {0, 0, -3.14159265f};
+    diff_drive_odometry_update(&pose, 0.1f, 0.1f, 0.3f);
+    CHECK(pose.theta < -3.14f);
+}
+
+TEST_CASE(mecanum_omega_threshold) {
+    // k = (Lx + Ly) / 2 がちょうど閾値 (1e-5) のときは ω を 0 とする
+    mecanum_params_t edge{0.05f, 0.00001f, 0.00001f};
+    twist2d_t t{9, 9, 9};
+    mecanum_drive_forward(&edge, tmp(mecanum_wheel_speeds_t{-10, 10, -10, 10}), &t);
+    CHECK_NEAR(t.omega, 0.0f, 0.0f);
+    mecanum_params_t above{0.05f, 0.00003f, 0.00001f};
+    mecanum_drive_forward(&above, tmp(mecanum_wheel_speeds_t{-10, 10, -10, 10}), &t);
+    CHECK(t.omega > 0.0f);
+}
+
 EMBED_TEST_MAIN()
