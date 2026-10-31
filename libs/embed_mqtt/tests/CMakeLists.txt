@@ -2,13 +2,13 @@ add_executable(test_mqtt
     test_mqtt.cpp
 )
 
-target_link_libraries(test_mqtt
-    PRIVATE
-        embed_mqtt
+# MQTT 3.1.1 のバイト列・Remaining Length の境界・クライアントの状態遷移を固定するテスト
+add_executable(test_mqtt_spec
+    test_mqtt_spec.cpp
 )
 
-target_set_warnings(test_mqtt)
-
-add_test(NAME test_mqtt COMMAND test_mqtt)
-
-target_link_libraries(test_mqtt PRIVATE embed_test)
+foreach(t test_mqtt test_mqtt_spec)
+    target_link_libraries(${t} PRIVATE embed_mqtt embed_test)
+    target_set_warnings(${t})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()

@@ -742,5 +742,83 @@
     "line": "if (actual_blksz < sizeof(void*)) {",
     "change": "< -> <=",
     "reason": "切り上げ後のサイズは常にポインタ幅以上で、この分岐には入らない"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (id_len > 0xFFFF || will_topic_len > 0xFFFF || user_len > 0xFFFF || pass_len > 0xFFFF) return false;",
+    "change": "|| -> &&",
+    "reason": "どれか 1 つが 65535 を超えれば、後段の w_u16 が書き込みを失敗させて同じく false を返す (二重の防御)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (rl_bytes == 0 || rem_len > buf_size || 1 + rl_bytes > buf_size - rem_len) return false;",
+    "change": "- -> +",
+    "reason": "出力バッファに収まらない場合は、後続の w_bytes の境界検査が同じく失敗させる (二重の防御)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (rl_bytes == 0 || rem_len > buf_size || 1 + rl_bytes > buf_size - rem_len) return false;",
+    "change": "|| -> &&",
+    "reason": "出力バッファに収まらない場合は、後続の w_bytes の境界検査が同じく失敗させる (二重の防御)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (rl_bytes == 0 || rem_len > buf_size || 1 + rl_bytes > buf_size - rem_len) return false;",
+    "change": "> -> >=",
+    "reason": "出力バッファに収まらない場合は、後続の w_bytes の境界検査が同じく失敗させる (二重の防御)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (n > w->cap - w->len) {",
+    "change": "- -> +",
+    "reason": "begin_packet の事前検査で全体が収まると確認済みなので、この検査が働く経路がない (二重の防御)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (n > 0) memcpy(&w->buf[w->len], src, n);",
+    "change": "> -> >=",
+    "reason": "長さ 0 の memcpy は何もしない"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (length <= 268435455) return 4;",
+    "change": "<= -> <",
+    "reason": "境界の 268435455 バイト (256 MiB) のメッセージを作るテストは現実的でない。符号化 / 復号の境界は直接テスト済み"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (!w.ok || w.len != 1 + remaining_length_bytes(rem_len) + rem_len) return false;",
+    "change": "|| -> &&",
+    "reason": "w.ok が偽なら長さは一致しないので、どちらの条件でも false になる (二重の検査)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (topic_len > 0xFFFF || msg->payload_len > SIZE_MAX / 2) return false;",
+    "change": "|| -> &&",
+    "reason": "トピック長の上限超過は後段の w_u16 でも失敗し、ペイロード長が SIZE_MAX / 2 を超える入力はメモリ上に作れない"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (topic_len > 0xFFFF || msg->payload_len > SIZE_MAX / 2) return false;",
+    "change": "> -> >=",
+    "reason": "トピック長の上限超過は後段の w_u16 でも失敗し、ペイロード長が SIZE_MAX / 2 を超える入力はメモリ上に作れない"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "size_t rem_len_bytes = mqtt_decode_remaining_length(&buf[1], len - 1, &rem_len);",
+    "change": "- -> +",
+    "reason": "読み取り範囲が 2 バイト広がるだけで、範囲外を読む以外の違いがない (ASan で検出される種類)"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_packet.c",
+    "line": "if (rem_len < 2) return MQTT_ERR_MALFORMED_PACKET;",
+    "change": "< -> <=",
+    "reason": "残り長 2 ではトピック長の 2 バイトしかなく、長さ 0 のトピックとして直後の検査で拒否される"
+  },
+  {
+    "file": "libs/embed_mqtt/src/mqtt_client.c",
+    "line": "if (rem > 0) {",
+    "change": "> -> >=",
+    "reason": "長さ 0 の memmove は何もしない"
   }
 ]
