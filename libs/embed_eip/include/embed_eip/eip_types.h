@@ -108,6 +108,8 @@ typedef enum {
     CIP_STATUS_REPLY_DATA_TOO_LARGE     = 0x11,
     CIP_STATUS_FRAGMENTATION_PRIMITIVE  = 0x12,
     CIP_STATUS_CONFIG_TOO_SMALL         = 0x13,
+    CIP_STATUS_NOT_ENOUGH_DATA          = 0x13, /**< 受信データが足りない (CIP Vol.1 の 0x13) */
+    CIP_STATUS_TOO_MUCH_DATA            = 0x15, /**< 受信データが多すぎる (CIP Vol.1 の 0x15) */
     CIP_STATUS_UNDEFINED_ATTRIBUTE      = 0x14,
     CIP_STATUS_INVALID_MEMBER_ID        = 0x15,
     CIP_STATUS_MEMBER_NOT_SETTABLE      = 0x16,

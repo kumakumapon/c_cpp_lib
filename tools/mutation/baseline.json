@@ -20,9 +20,9 @@
     "valid": 23
   },
   "embed_eip": {
-    "rate": 0.2375,
-    "killed": 19,
-    "valid": 80
+    "rate": 1.0,
+    "killed": 107,
+    "valid": 107
   },
   "embed_filter": {
     "rate": 1.0,

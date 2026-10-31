@@ -14,11 +14,11 @@ static inline void encode_u32(uint32_t val, uint8_t *dst) {
 }
 
 static inline uint16_t decode_u16(const uint8_t *src) {
-    return (uint16_t)(src[0] | (src[1] << 8));
+    return (uint16_t)((uint32_t)src[0] | ((uint32_t)src[1] << 8));
 }
 
 static inline uint32_t decode_u32(const uint8_t *src) {
-    return (uint32_t)(src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24));
+    return (uint32_t)src[0] | ((uint32_t)src[1] << 8) | ((uint32_t)src[2] << 16) | ((uint32_t)src[3] << 24);
 }
 
 size_t eip_encode_encap_header(const eip_encap_header_t *hdr, uint8_t *dst) {
@@ -82,6 +82,8 @@ size_t eip_build_send_rr_data(uint32_t session_handle,
      *   Item 2: Unconnected Data (Type 2B=0x00B2, Len 2B=cip_len, Data cip_len)
      */
     size_t cpf_len = 4 + 2 + 2 + 4 + 4 + cip_len;
+    /* ヘッダの length は 16 ビット、アイテム長も 16 ビット */
+    if (cip_len > 0xFFFF || cpf_len > 0xFFFF) return 0;
     if (EIP_ENCAP_HEADER_SIZE + cpf_len > max_dst_len) return 0;
 
     eip_encap_header_t hdr;

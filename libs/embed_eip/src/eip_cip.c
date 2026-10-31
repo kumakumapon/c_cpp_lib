@@ -106,6 +106,7 @@ size_t cip_decode_epath(const uint8_t *src, size_t src_len, cip_epath_t *path) {
 
 size_t cip_encode_request(const cip_request_t *req, uint8_t *dst, size_t max_dst_len) {
     if (!req || !dst) return 0;
+    if (req->data_len > 0 && !req->data) return 0; /* 長さだけがあって中身のない要求は作らない */
 
     uint8_t path_buf[32];
     size_t path_bytes = cip_encode_epath(&req->path, path_buf);
