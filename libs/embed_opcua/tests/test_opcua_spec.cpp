@@ -1023,4 +1023,74 @@ TEST_CASE(server_edge_cases) {
     CHECK(std::string(out.value.value.string_val) == "Pump/Speed");
 }
 
+TEST_CASE(null_pointers_and_short_lengths_are_rejected_by_every_codec) {
+    uint8_t buf[64];
+    std::memset(buf, 0, sizeof(buf));
+    // 出力先 (dst) が NULL でも、容量が十分でも書き込まない
+    CHECK_EQ(opcua_encode_u8(1, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_u16(1, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_u32(1, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_u64(1, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_float(1, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_double(1, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_string("a", nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_string(nullptr, nullptr, 64), 0u);
+    opcua_variant_t v = int32_var(1);
+    opcua_datavalue_t dv = {};
+    dv.value = v;
+    opcua_nodeid_t id = num_id(0, 1);
+    opcua_tcp_header_t th = {};
+    opcua_hello_message_t hello = {};
+    opcua_ack_message_t ack = {};
+    CHECK_EQ(opcua_encode_variant(&v, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_datavalue(&dv, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_nodeid(&id, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_tcp_header(&th, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_hello(&hello, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_ack(&ack, nullptr, 64), 0u);
+    CHECK_EQ(opcua_encode_error(1, "x", nullptr, 64), 0u);
+    // 入力が NULL / 出力先が NULL でも読み書きしない
+    uint8_t v8;
+    uint16_t v16;
+    uint32_t v32;
+    uint64_t v64;
+    float f;
+    double d;
+    char s[8];
+    CHECK_EQ(opcua_decode_u8(nullptr, 64, &v8), 0u);
+    CHECK_EQ(opcua_decode_u16(nullptr, 64, &v16), 0u);
+    CHECK_EQ(opcua_decode_u16(buf, 64, nullptr), 0u);
+    CHECK_EQ(opcua_decode_u32(nullptr, 64, &v32), 0u);
+    CHECK_EQ(opcua_decode_u64(nullptr, 64, &v64), 0u);
+    CHECK_EQ(opcua_decode_u64(buf, 64, nullptr), 0u);
+    CHECK_EQ(opcua_decode_float(nullptr, 64, &f), 0u);
+    CHECK_EQ(opcua_decode_double(nullptr, 64, &d), 0u);
+    CHECK_EQ(opcua_decode_string(nullptr, 64, s, sizeof(s)), 0u);
+    CHECK_EQ(opcua_decode_string(buf, 64, nullptr, sizeof(s)), 0u);
+    CHECK_EQ(opcua_decode_variant(nullptr, 64, &v), 0u);
+    CHECK_EQ(opcua_decode_nodeid(nullptr, 64, &id), 0u);
+    CHECK_EQ(opcua_decode_datavalue(nullptr, 64, &dv), 0u);
+    CHECK_EQ(opcua_decode_tcp_header(nullptr, 64, &th), 0u);
+    CHECK_EQ(opcua_decode_tcp_header(buf, 64, nullptr), 0u);
+    CHECK_EQ(opcua_decode_hello(nullptr, 64, &hello), 0u);
+    CHECK_EQ(opcua_decode_ack(nullptr, 64, &ack), 0u);
+    // 長さが 1 バイト足りない (有効なポインタ)
+    const uint8_t src[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    CHECK_EQ(opcua_decode_u16(src, 1, &v16), 0u);
+    CHECK_EQ(opcua_decode_u32(src, 3, &v32), 0u);
+    CHECK_EQ(opcua_decode_u64(src, 7, &v64), 0u);
+    CHECK_EQ(opcua_decode_float(src, 3, &f), 0u);
+    CHECK_EQ(opcua_decode_double(src, 7, &d), 0u);
+    CHECK_EQ(opcua_encode_tcp_header(&th, buf, 7), 0u);
+    CHECK_EQ(opcua_encode_error(1, "x", buf, 16), 0u); // 16 + 1 バイト必要
+    CHECK_EQ(opcua_encode_error(1, "x", buf, 17), 17u);
+}
+
+TEST_CASE(empty_string_nodeid_needs_exactly_seven_bytes) {
+    uint8_t b[16];
+    opcua_nodeid_t e = str_id(0, "");
+    CHECK_EQ(opcua_encode_nodeid(&e, b, 7), 7u);
+    CHECK_EQ(opcua_encode_nodeid(&e, b, 6), 0u);
+}
+
 EMBED_TEST_MAIN()
