@@ -1,4 +1,5 @@
 #pragma once
+/* 互換レイヤ: 旧 uart_ringbuf_* は embed_ringbuf の別名。新規コードは embed_ringbuf を直接使う。 */
 #include "embed_ringbuf/embed_ringbuf.h"
 typedef embed_ringbuf_t uart_ringbuf_t;
 #define uart_ringbuf_init embed_ringbuf_init
@@ -6,6 +7,8 @@ typedef embed_ringbuf_t uart_ringbuf_t;
 #define uart_ringbuf_write embed_ringbuf_write
 #define uart_ringbuf_get embed_ringbuf_get
 #define uart_ringbuf_read embed_ringbuf_read
+#define uart_ringbuf_peek embed_ringbuf_peek
+#define uart_ringbuf_skip embed_ringbuf_skip
 #define uart_ringbuf_available embed_ringbuf_available
 #define uart_ringbuf_free_space embed_ringbuf_free_space
 #define uart_ringbuf_clear embed_ringbuf_clear
