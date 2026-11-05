@@ -25,7 +25,7 @@ typedef enum {
     BRIDGE_PROTO_MODBUS_REG     = 1, /**< Modbus 保持レジスタ (40001〜) */
     BRIDGE_PROTO_OPCUA_NODE     = 2, /**< OPC-UA 変数ノード */
     BRIDGE_PROTO_EIP_ASSEMBLY   = 3, /**< EtherNet/IP アセンブリインスタンス + オフセット */
-    BRIDGE_PROTO_MQTT_TOPIC     = 4, /**< MQTT パブリッシュトピック */
+    BRIDGE_PROTO_MQTT_TOPIC     = 4, /**< MQTT トピック (宛先: publish / 送信元: bridge_router_on_mqtt_message) */
     BRIDGE_PROTO_CANOPEN_OD     = 5  /**< CANopen オブジェクトディクショナリ (Index/SubIndex) */
 } bridge_proto_type_t;
 
@@ -39,7 +39,7 @@ typedef enum {
     BRIDGE_TYPE_INT32           = 3,
     BRIDGE_TYPE_UINT32          = 4,
     BRIDGE_TYPE_FLOAT           = 5,
-    BRIDGE_TYPE_RAW_BYTES       = 6
+    BRIDGE_TYPE_RAW_BYTES       = 6  /**< data_size バイトをそのままコピー (RAW / EIP / CANopen / Modbus) */
 } bridge_data_type_t;
 
 /**
@@ -47,7 +47,7 @@ typedef enum {
  */
 typedef enum {
     BRIDGE_SYNC_ALWAYS          = 0, /**< 毎サイクル無条件転送 */
-    BRIDGE_SYNC_ON_CHANGE       = 1, /**< 値変化時のみ転送 (COV: Change of Value) */
+    BRIDGE_SYNC_ON_CHANGE       = 1, /**< 値変化時のみ転送 (COV: Change of Value。deadband で不感帯) */
     BRIDGE_SYNC_PERIODIC        = 2  /**< 一定周期 (interval_ms) ごとに転送 */
 } bridge_sync_mode_t;
 
@@ -90,6 +90,10 @@ typedef struct {
     uint8_t last_data[BRIDGE_MAX_DATA_SIZE];
     bool has_last_data;
     bool is_active;
+    float deadband;         /**< ON_CHANGE: 前回転送値との差がこれ以下なら転送しない (0 で無効) */
+    double last_value;      /**< 前回転送したときの数値 (deadband 判定用) */
+    uint32_t sync_count;    /**< 転送に成功した回数 */
+    uint32_t error_count;   /**< 読み出し・書き込みに失敗した回数 */
 } bridge_rule_t;
 
 #ifdef __cplusplus

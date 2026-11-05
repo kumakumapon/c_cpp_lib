@@ -23,3 +23,23 @@ run_onceは時計を読み、期限の来たタイマを実行し、次のタス
 周期再登録のオーバーフロー時はそのタイマを停止します。
 タイマコールバック内のstart/cancelは可能ですが、initやadvance/run_onceの再入は禁止です。
 並行呼び出しには外部同期が必要です。
+
+## 問い合わせ・tickless スリープ
+
+```c
+uint64_t wake;
+if (embed_sched_next_due(&scheduler, &wake)) {
+    /* wake (絶対時刻) まで低消費電力モードで眠る。RTC/LPTIM の比較値に設定する */
+}
+uint64_t left;
+embed_sched_remaining(&scheduler, 0, &left); /* タイマ 0 の期限までの tick */
+embed_sched_is_active(&scheduler, 0);
+embed_sched_remove_task(&scheduler, background_work, user);
+```
+
+- `next_due` は起動中の全タイマを走査します (O(タイマ数))。
+- 目標時刻までが64 tickを超えるadvanceでは、次の期限の直前まで一気に進めます。
+  長時間スリープ後の追いつきでもtickごとの空回りはしません (期限の来たタイマは全て、正しい時刻で実行)。
+- `remove_task` はタスク・タイマのコールバック内からも呼べます。ラウンドロビンの順序は保たれます。
+- 統計は `late_timers` (目標時刻より前が期限だったタイマ)、`task_overruns` (budget超過)、
+  `missed` (両者の合計、互換用) に分かれています。budgetちょうどは超過に数えません。

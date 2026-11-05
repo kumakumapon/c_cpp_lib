@@ -68,6 +68,29 @@ void bridge_router_bind_mqtt(bridge_router_t *router, mqtt_client_t *mqtt_client
 int bridge_router_add_rule(bridge_router_t *router, const bridge_rule_t *rule);
 
 /**
+ * @brief ルールの有効 / 無効を切り替えます (index は add_rule の戻り値)。
+ */
+bool bridge_router_set_rule_active(bridge_router_t *router, int index, bool active);
+
+/**
+ * @brief ルールを参照します (統計 sync_count / error_count の確認など)。範囲外は NULL。
+ */
+const bridge_rule_t *bridge_router_get_rule(const bridge_router_t *router, int index);
+
+/**
+ * @brief 受信した MQTT メッセージを、送信元が MQTT トピックのルールへ流します。
+ *
+ * ペイロードは数値テキスト ("12.5", "-3", "0x1F") または true / false / on / off。
+ * トピックが完全一致する有効なルールごとにスケール変換して宛先へ書き込み、成功した数を返します。
+ * mqtt_client の on_message コールバックから呼んでください。
+ */
+size_t bridge_router_on_mqtt_message(bridge_router_t *router, const char *topic,
+                                     const void *payload, size_t payload_len);
+/** トピックが NUL 終端でない場合 (mqtt_message_t の topic / topic_len) 用 */
+size_t bridge_router_on_mqtt_message_n(bridge_router_t *router, const char *topic, size_t topic_len,
+                                       const void *payload, size_t payload_len);
+
+/**
  * @brief 全てのアクティブなルールに対して即時同期転送を実行します。
  * @return 転送が実行されたルール数
  */

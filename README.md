@@ -28,14 +28,19 @@ c_cpp_lib/
 │   ├── embed_canopen/          # 組み込み向けCANopen (CiA 301/402) プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_canopen/README.md))
 │   ├── embed_diag/             # 組み込み向け障害診断・ブラックボックスレコーダー ([仕様・使い方ドキュメント](libs/embed_diag/README.md))
 │   ├── embed_eip/              # 産業用EtherNet/IP (CIP) プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_eip/README.md))
+│   ├── embed_cli/              # シリアルコンソール用コマンドシェル (行編集・履歴・補完) ([仕様・使い方ドキュメント](libs/embed_cli/README.md))
 │   ├── embed_filter/           # 組み込み向けセンサDSP & 姿勢推定フィルタ集 ([仕様・使い方ドキュメント](libs/embed_filter/README.md))
+│   ├── embed_frame/            # COBS / SLIP フレーミング ([仕様・使い方ドキュメント](libs/embed_frame/README.md))
 │   ├── embed_fsm/              # 組み込み向け階層型状態遷移マシン (HSM) ([仕様・使い方ドキュメント](libs/embed_fsm/README.md))
 │   ├── embed_heap/             # 組み込み向け静的ヒープメモリアロケータ ([仕様・使い方ドキュメント](libs/embed_heap/README.md))
+│   ├── embed_input/            # 入力のチャタリング除去・ボタン操作判定 ([仕様・使い方ドキュメント](libs/embed_input/README.md))
+│   ├── embed_json/             # 固定バッファ JSON 書き出し / 厳密パーサ ([仕様・使い方ドキュメント](libs/embed_json/README.md))
 │   ├── embed_kinematics/       # ロボット運動学 & オドメトリ計算ライブラリ ([仕様・使い方ドキュメント](libs/embed_kinematics/README.md))
 │   ├── embed_log/              # 組み込み向け軽量ロガーライブラリ ([仕様・使い方ドキュメント](libs/embed_log/README.md))
 │   ├── embed_modbus/           # 組み込み向けModbus RTU/ASCIIプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_modbus/README.md))
 │   ├── embed_motion/           # モータ加減速・軌道生成プロファイル ([仕様・使い方ドキュメント](libs/embed_motion/README.md))
 │   ├── embed_mqtt/             # 組み込み向けMQTT v3.1.1プロトコルスタック ([仕様・使い方ドキュメント](libs/embed_mqtt/README.md))
+│   ├── embed_nvparam/          # 電断に強いフラッシュ設定保存 ([仕様・使い方ドキュメント](libs/embed_nvparam/README.md))
 │   ├── embed_opcua/            # 産業用OPC-UAバイナリプロトコルスタック ([仕様・使い方ドキュメント](libs/embed_opcua/README.md))
 │   ├── embed_path/             # 自律ロボット向け経路計画 & 追従コントローラ ([仕様・使い方ドキュメント](libs/embed_path/README.md))
 │   ├── embed_pid/              # 組み込み向け高機能PID制御ライブラリ ([仕様・使い方ドキュメント](libs/embed_pid/README.md))
@@ -46,7 +51,9 @@ c_cpp_lib/
 │   ├── CMakeLists.txt          # 各アプリの自動読み込み設定
 │   ├── bridge_demo/            # 産業用マルチプロトコルルーターのデモアプリ
 │   ├── canopen_demo/           # CANopen スレーブノード & 通信デモアプリ
-│   ├── cli_demo/               # サンプルCLIアプリケーション
+│   ├── cli_demo/               # embed_cli による保守コンソール
+│   ├── firmware_demo/          # スーパーループ型ファームウェア骨格 (自己診断・設定保存・テレメトリ・コンソール)
+│   ├── modbus_tcp_demo/        # 実ソケットで動く Modbus TCP サーバ / クライアント
 │   ├── eip_demo/               # EtherNet/IP アダプタノードのデモアプリ
 │   ├── embed_heap_demo/        # embed_heapのデモアプリ
 │   ├── embed_log_demo/         # embed_logのデモアプリ
@@ -211,6 +218,22 @@ int main() {
 | :--- | :--- | :--- |
 | `BUILD_TESTING` | `ON` | 単体テストのビルドを有効化 |
 | `BUILD_SHARED_LIBS` | `OFF` | 静的ライブラリではなく共有ライブラリ (.dll/.so) としてビルド |
+
+## 追加ライブラリ（実用機能の拡充）
+
+| ライブラリ | 用途 |
+| --- | --- |
+| [embed_frame](libs/embed_frame/README.md) | COBS / SLIP によるパケット境界、ストリーム復号 |
+| [embed_cli](libs/embed_cli/README.md) | UART 保守コンソール (行編集・履歴・Tab 補完・引数解析) |
+| [embed_json](libs/embed_json/README.md) | MQTT / HTTP 向け JSON 書き出し・厳密パーサ |
+| [embed_nvparam](libs/embed_nvparam/README.md) | 書き込み中の電源断に耐えるフラッシュ設定保存 |
+| [embed_input](libs/embed_input/README.md) | チャタリング除去、クリック / 長押し / リピート判定 |
+
+既存ライブラリも拡張しました: CRC 12 種 + 任意パラメータ、SPSC 安全なリングバッファ (DMA 向けゼロコピー)、
+UART プロトコルの再同期・受信タイムアウト・ARQ、CANopen の SDO 分割転送 / PDO / EMCY / Heartbeat 監視、
+Modbus TCP クライアント、ブリッジの MQTT 入力・不感帯、スケジューラの tickless 対応、メモリ診断の故障注入テスト。
+**全デモは CTest のスモークテスト (`ctest -L demo`) として実行されます。**
+各ライブラリの README の「旧版からの変更点」「修正した不具合」を確認してください。
 
 ## 品質基盤と追加ユーティリティ（#15）
 

@@ -2,6 +2,8 @@
 add_library(embed_canopen
     src/canopen_od.c
     src/canopen_node.c
+    src/canopen_sdo.c
+    src/canopen_pdo.c
 )
 
 target_include_directories(embed_canopen

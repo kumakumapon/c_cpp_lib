@@ -64,7 +64,8 @@ typedef enum {
     MODBUS_ERR_EXCEPTION_RECEIVED       = -5,
     MODBUS_ERR_INVALID_RESPONSE         = -6,
     MODBUS_ERR_ADDRESS_MISMATCH         = -7,
-    MODBUS_ERR_FUNCTION_MISMATCH        = -8
+    MODBUS_ERR_FUNCTION_MISMATCH        = -8,
+    MODBUS_ERR_TRANSACTION_MISMATCH     = -9   /**< Modbus TCP: Transaction ID 不一致 */
 } modbus_status_t;
 
 #ifdef __cplusplus

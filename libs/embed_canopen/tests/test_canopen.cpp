@@ -43,6 +43,11 @@ TEST_CASE(test_canopen_node_nmt_and_heartbeat) {
     std::cout << "# [Test] Running CANopen Node NMT & Heartbeat tests..." << std::endl;
     canopen_node_t node;
     canopen_node_init(&node, 5, "TestNode");
+    // CiA 301: 初期化後にブートアップ (0x700 + ID, データ 0x00) を送る
+    can_frame_t boot{};
+    CHECK(canopen_node_pop_tx(&node, &boot));
+    CHECK(boot.id == 0x700 + 5);
+    CHECK(boot.len == 1 && boot.data[0] == 0x00);
 
     CHECK(node.node_id == 5);
     CHECK(node.nmt_state == CANOPEN_NMT_STATE_PRE_OPERATIONAL);
@@ -84,6 +89,8 @@ TEST_CASE(test_canopen_sdo_transfer) {
     std::cout << "# [Test] Running CANopen SDO Read/Write tests..." << std::endl;
     canopen_node_t node;
     canopen_node_init(&node, 1, "ServoDrive");
+    can_frame_t boot{};
+    CHECK(canopen_node_pop_tx(&node, &boot)); // ブートアップを取り出しておく
 
     uint32_t target_position = 10000;
     canopen_od_add_entry(&node.od, 0x607A, 0x00, OD_TYPE_INT32, OD_ACCESS_RW, &target_position,
