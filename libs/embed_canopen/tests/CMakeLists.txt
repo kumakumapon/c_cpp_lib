@@ -1,15 +1,10 @@
-# embed_canopen unit tests
-add_executable(test_canopen
-    test_canopen.cpp
-)
+add_executable(test_canopen test_canopen.cpp)
 
-target_link_libraries(test_canopen
-    PRIVATE
-        embed_canopen
-)
+# CiA 301 のフレーム配置: NMT・ブートアップ・SDO (加速 / 分割・アボート)・PDO・SYNC・EMCY・Heartbeat
+add_executable(test_canopen_spec test_canopen_spec.cpp)
 
-target_set_warnings(test_canopen)
-
-add_test(NAME test_canopen COMMAND test_canopen)
-
-target_link_libraries(test_canopen PRIVATE embed_test)
+foreach(t test_canopen test_canopen_spec)
+    target_link_libraries(${t} PRIVATE embed_canopen embed_test)
+    target_set_warnings(${t})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()
