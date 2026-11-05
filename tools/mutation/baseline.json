@@ -1,12 +1,12 @@
 {
   "embed_bridge": {
-    "rate": 0.65,
-    "killed": 52,
+    "rate": 0.7875,
+    "killed": 63,
     "valid": 80
   },
   "embed_canopen": {
-    "rate": 0.5625,
-    "killed": 45,
+    "rate": 0.65,
+    "killed": 52,
     "valid": 80
   },
   "embed_cli": {
@@ -60,8 +60,8 @@
     "valid": 23
   },
   "embed_json": {
-    "rate": 0.5949,
-    "killed": 47,
+    "rate": 0.7595,
+    "killed": 60,
     "valid": 79
   },
   "embed_kinematics": {
@@ -95,8 +95,8 @@
     "valid": 219
   },
   "embed_nvparam": {
-    "rate": 0.575,
-    "killed": 46,
+    "rate": 0.725,
+    "killed": 58,
     "valid": 80
   },
   "embed_opcua": {

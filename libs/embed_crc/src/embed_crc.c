@@ -178,7 +178,7 @@ bool embed_crc_verify(embed_crc_kind k, const void *frame, size_t len) {
     const size_t n = catalog[k].width / 8u;
     if (len < n)
         return false;
-    uint8_t expected[4];
+    uint8_t expected[4] = {0, 0, 0, 0};
     const uint32_t crc = embed_crc(k, frame, len - n);
     embed_crc_append(k, crc, expected, sizeof(expected));
     const uint8_t *tail = (const uint8_t *)frame + (len - n);
