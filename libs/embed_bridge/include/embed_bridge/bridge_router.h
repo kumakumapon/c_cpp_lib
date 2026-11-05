@@ -86,6 +86,9 @@ const bridge_rule_t *bridge_router_get_rule(const bridge_router_t *router, int i
  */
 size_t bridge_router_on_mqtt_message(bridge_router_t *router, const char *topic,
                                      const void *payload, size_t payload_len);
+/** トピックが NUL 終端でない場合 (mqtt_message_t の topic / topic_len) 用 */
+size_t bridge_router_on_mqtt_message_n(bridge_router_t *router, const char *topic, size_t topic_len,
+                                       const void *payload, size_t payload_len);
 
 /**
  * @brief 全てのアクティブなルールに対して即時同期転送を実行します。

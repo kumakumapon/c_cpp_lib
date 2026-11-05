@@ -534,6 +534,14 @@ const bridge_rule_t *bridge_router_get_rule(const bridge_router_t *router, int i
     return &router->rules[index];
 }
 
+/* strnlen は C11 にないので自前で数える */
+static size_t bounded_len(const char *s, size_t max) {
+    size_t n = 0;
+    while (n < max && s[n] != '\0')
+        ++n;
+    return n;
+}
+
 static bool parse_number(const void *payload, size_t len, double *out) {
     char text[32];
     if (!payload || len == 0 || len >= sizeof(text))
@@ -566,13 +574,20 @@ static bool parse_number(const void *payload, size_t len, double *out) {
 
 size_t bridge_router_on_mqtt_message(bridge_router_t *router, const char *topic,
                                      const void *payload, size_t payload_len) {
-    if (!router || !topic || (!payload && payload_len))
+    return topic ? bridge_router_on_mqtt_message_n(router, topic, strlen(topic), payload, payload_len)
+                 : 0;
+}
+
+size_t bridge_router_on_mqtt_message_n(bridge_router_t *router, const char *topic, size_t topic_len,
+                                       const void *payload, size_t payload_len) {
+    if (!router || !topic || (!payload && payload_len) || topic_len >= BRIDGE_MAX_TOPIC_LEN)
         return 0;
     size_t count = 0;
     for (size_t i = 0; i < router->rule_count; ++i) {
         bridge_rule_t *rule = &router->rules[i];
+        const char *want = rule->src.target.mqtt_topic;
         if (!rule->is_active || rule->src.proto != BRIDGE_PROTO_MQTT_TOPIC ||
-            strncmp(rule->src.target.mqtt_topic, topic, BRIDGE_MAX_TOPIC_LEN) != 0)
+            bounded_len(want, BRIDGE_MAX_TOPIC_LEN) != topic_len || memcmp(want, topic, topic_len) != 0)
             continue;
         uint8_t src_buf[BRIDGE_MAX_DATA_SIZE] = {0};
         double raw = 0.0;

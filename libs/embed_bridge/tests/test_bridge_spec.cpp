@@ -259,6 +259,11 @@ TEST_CASE(mqtt_messages_write_to_devices) {
     bridge_router_set_rule_active(&r, sp_idx, false);
     CHECK_EQ(bridge_router_on_mqtt_message(&r, "plant/setpoint", "1", 1), 0u);
     CHECK_EQ(bridge_router_on_mqtt_message(nullptr, "plant/run", "1", 1), 0u);
+    // NUL 終端でないトピック (mqtt_message_t そのまま)
+    const char frame_topic[] = "plant/runXYZ";
+    CHECK_EQ(bridge_router_on_mqtt_message_n(&r, frame_topic, 9, "1", 1), 1u);
+    CHECK_EQ(regs[2], 1u);
+    CHECK_EQ(bridge_router_on_mqtt_message_n(&r, frame_topic, 10, "1", 1), 0u);
 }
 
 TEST_CASE(mqtt_destination_payload_formats) {

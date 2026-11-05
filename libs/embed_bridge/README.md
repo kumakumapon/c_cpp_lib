@@ -120,7 +120,8 @@ sp.scale = 10.0f;
 bridge_router_add_rule(&router, &sp);
 
 void on_message(mqtt_client_t *c, const mqtt_message_t *m, void *user) {
-    bridge_router_on_mqtt_message(&router, m->topic, m->payload, m->payload_len);
+    /* mqtt_message_t の topic は NUL 終端でないので _n 版を使う */
+    bridge_router_on_mqtt_message_n(&router, m->topic, m->topic_len, m->payload, m->payload_len);
 }
 ```
 
