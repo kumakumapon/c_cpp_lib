@@ -1,5 +1,8 @@
 #include "embed_bridge/bridge_router.h"
+#include <ctype.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void bridge_router_init(bridge_router_t *router) {
@@ -72,6 +75,13 @@ int bridge_router_add_rule(bridge_router_t *router, const bridge_rule_t *rule) {
         return -1;
     if (rule->data_size > BRIDGE_MAX_DATA_SIZE)
         return -1;
+    /* 生バイトは数値と相互変換できない。長さも明示する */
+    const bool src_raw = rule->src_type == BRIDGE_TYPE_RAW_BYTES;
+    const bool dst_raw = rule->dst_type == BRIDGE_TYPE_RAW_BYTES;
+    if (src_raw != dst_raw || (src_raw && rule->data_size == 0))
+        return -1;
+    if (rule->deadband < 0.0f || rule->deadband != rule->deadband)
+        return -1;
 
     size_t idx = router->rule_count;
     router->rules[idx] = *rule;
@@ -79,6 +89,9 @@ int bridge_router_add_rule(bridge_router_t *router, const bridge_rule_t *rule) {
     router->rules[idx].is_active = true;
     router->rules[idx].has_last_data = false;
     router->rules[idx].timer_ms = 0;
+    router->rules[idx].last_value = 0.0;
+    router->rules[idx].sync_count = 0;
+    router->rules[idx].error_count = 0;
 
     if (router->rules[idx].data_size == 0) {
         router->rules[idx].data_size = get_type_size(rule->src_type);
@@ -106,7 +119,18 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
         if (!router->modbus_holding_regs || addr >= router->modbus_reg_count)
             return false;
 
-        if (sz == 2) {
+        if (src_type == BRIDGE_TYPE_RAW_BYTES) {
+            /* 生バイト: 1 レジスタ = 2 バイト (上位バイトが先: Modbus の並び) */
+            const size_t words = (sz + 1) / 2;
+            if (sz % 2 != 0 || words > router->modbus_reg_count - addr)
+                return false;
+            for (size_t i = 0; i < words; ++i) {
+                buf[2 * i] = (uint8_t)(router->modbus_holding_regs[addr + i] >> 8);
+                buf[2 * i + 1] = (uint8_t)router->modbus_holding_regs[addr + i];
+            }
+        } else if (sz == 1) {
+            buf[0] = router->modbus_holding_regs[addr] != 0 ? 1 : 0;
+        } else if (sz == 2) {
             uint16_t r = router->modbus_holding_regs[addr];
             memcpy(buf, &r, 2);
         } else if (sz == 4) {
@@ -173,7 +197,7 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
     case BRIDGE_PROTO_EIP_ASSEMBLY: {
         if (!router->eip_adapter)
             return false;
-        uint8_t assem[128] = {0};
+        uint8_t assem[EIP_MAX_ASSEMBLY_SIZE] = {0};
         size_t assem_sz = 0;
         if (!eip_adapter_get_assembly_data(router->eip_adapter, ep->target.eip.instance_id, assem,
                                            &assem_sz)) {
@@ -188,8 +212,12 @@ static bool read_endpoint(const bridge_router_t *router, const bridge_endpoint_t
     case BRIDGE_PROTO_CANOPEN_OD: {
         if (!router->canopen_node)
             return false;
+        /* 型の長さとオブジェクトの長さが一致しなければ読まない (黙って切り詰めない) */
+        const canopen_od_entry_t *e = canopen_od_find_entry_const(
+            &router->canopen_node->od, ep->target.canopen.index, ep->target.canopen.subindex);
         size_t out_len = 0;
-        if (!canopen_od_read(&router->canopen_node->od, ep->target.canopen.index,
+        if (!e || e->data_len != sz ||
+            !canopen_od_read(&router->canopen_node->od, ep->target.canopen.index,
                              ep->target.canopen.subindex, buf, sz, &out_len)) {
             return false;
         }
@@ -262,7 +290,17 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
         if (!router->modbus_holding_regs || addr >= router->modbus_reg_count)
             return false;
 
-        if (sz == 2) {
+        if (dst_type == BRIDGE_TYPE_RAW_BYTES) {
+            const size_t words = (sz + 1) / 2;
+            if (sz % 2 != 0 || words > router->modbus_reg_count - addr)
+                return false;
+            for (size_t i = 0; i < words; ++i)
+                router->modbus_holding_regs[addr + i] =
+                    (uint16_t)((buf[2 * i] << 8) | buf[2 * i + 1]);
+        } else if (sz == 1) {
+            /* BOOL は 0 / 1 のレジスタ値 (旧版は何も書かずに成功を返していた) */
+            router->modbus_holding_regs[addr] = buf[0] ? 1 : 0;
+        } else if (sz == 2) {
             uint16_t r;
             memcpy(&r, buf, 2);
             router->modbus_holding_regs[addr] = r;
@@ -273,6 +311,8 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
             memcpy(&val32, buf, 4);
             router->modbus_holding_regs[addr] = (uint16_t)(val32 >> 16);
             router->modbus_holding_regs[addr + 1] = (uint16_t)(val32 & 0xFFFF);
+        } else {
+            return false;
         }
         return true;
     }
@@ -317,18 +357,16 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
     case BRIDGE_PROTO_EIP_ASSEMBLY: {
         if (!router->eip_adapter)
             return false;
-        uint8_t assem[128] = {0};
+        uint8_t assem[EIP_MAX_ASSEMBLY_SIZE] = {0};
         size_t assem_sz = 0;
         if (!eip_adapter_get_assembly_data(router->eip_adapter, ep->target.eip.instance_id, assem,
                                            &assem_sz)) {
             return false;
         }
-        if (ep->target.eip.offset + sz > sizeof(assem))
+        /* アセンブリの宣言サイズを超える書き込みは失敗 (旧版は黙って切り捨てて成功扱いだった) */
+        if (ep->target.eip.offset + sz > assem_sz)
             return false;
         memcpy(assem + ep->target.eip.offset, buf, sz);
-        if (ep->target.eip.offset + sz > assem_sz) {
-            assem_sz = ep->target.eip.offset + sz;
-        }
         return eip_adapter_set_assembly_data(router->eip_adapter, ep->target.eip.instance_id, assem,
                                              assem_sz);
     }
@@ -343,6 +381,9 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
     case BRIDGE_PROTO_MQTT_TOPIC: {
         if (!router->mqtt_client)
             return false;
+        if (dst_type == BRIDGE_TYPE_RAW_BYTES)
+            return mqtt_client_publish(router->mqtt_client, ep->target.mqtt_topic, buf, sz,
+                                       MQTT_QOS_0, false);
         char payload[64] = {0};
         if (dst_type == BRIDGE_TYPE_FLOAT) {
             snprintf(payload, sizeof(payload), "%.2f", val);
@@ -360,86 +401,97 @@ static bool write_endpoint(bridge_router_t *router, const bridge_endpoint_t *ep,
     }
 }
 
-static bool sync_rule(bridge_router_t *router, bridge_rule_t *rule) {
-    if (!router || !rule || !rule->is_active)
-        return false;
-
-    uint8_t src_buf[BRIDGE_MAX_DATA_SIZE] = {0};
-    double raw_val = 0.0;
-
-    if (!read_endpoint(router, &rule->src, rule->src_type, rule->data_size, src_buf, &raw_val)) {
-        return false;
-    }
-
-    // 変化検知 (COV: Change of Value) 判定
-    if (rule->sync_mode == BRIDGE_SYNC_ON_CHANGE) {
-        if (rule->has_last_data && memcmp(rule->last_data, src_buf, rule->data_size) == 0) {
-            return false; // 変化なし
-        }
-    }
-
-    // スケール変換の適用
-    double final_val = raw_val;
-    if (rule->scale != 0.0f) {
-        final_val = (raw_val * (double)rule->scale) + (double)rule->offset;
-    }
-
-    // 再エンコード
-    uint8_t dst_buf[BRIDGE_MAX_DATA_SIZE] = {0};
-    size_t dst_sz = get_type_size(rule->dst_type);
-
+/* 変換後の値を宛先型のバイト列にする。生バイトは src をそのまま使う */
+static size_t encode_value(const bridge_rule_t *rule, double final_val, const uint8_t *src_buf,
+                           uint8_t *dst_buf) {
     switch (rule->dst_type) {
-    case BRIDGE_TYPE_BOOL: {
-        dst_buf[0] = (final_val != 0.0f) ? 1 : 0;
-        break;
-    }
+    case BRIDGE_TYPE_BOOL:
+        dst_buf[0] = (final_val != 0.0) ? 1 : 0;
+        return 1;
     case BRIDGE_TYPE_INT16: {
         int16_t v = to_i16(final_val);
         memcpy(dst_buf, &v, 2);
-        break;
+        return 2;
     }
     case BRIDGE_TYPE_UINT16: {
         uint16_t v = to_u16(final_val);
         memcpy(dst_buf, &v, 2);
-        break;
+        return 2;
     }
     case BRIDGE_TYPE_INT32: {
         int32_t v = to_i32(final_val);
         memcpy(dst_buf, &v, 4);
-        break;
+        return 4;
     }
     case BRIDGE_TYPE_UINT32: {
         uint32_t v = to_u32(final_val);
         memcpy(dst_buf, &v, 4);
-        break;
+        return 4;
     }
     case BRIDGE_TYPE_FLOAT: {
         float v = (float)final_val;
         memcpy(dst_buf, &v, 4);
-        break;
+        return 4;
     }
-    default:
-        memcpy(dst_buf, src_buf, dst_sz);
-        break;
+    default: /* BRIDGE_TYPE_RAW_BYTES: 長さは data_size (旧版は常に 2 バイトだった) */
+        memcpy(dst_buf, src_buf, rule->data_size);
+        return rule->data_size;
+    }
+}
+
+static double scaled(const bridge_rule_t *rule, double raw) {
+    /* scale == 0 は「変換なし」(互換のため。offset も適用しない) */
+    return rule->scale != 0.0f ? raw * (double)rule->scale + (double)rule->offset : raw;
+}
+
+/* 1: 転送した, 0: 変化なしで省略, -1: 失敗 */
+static int sync_rule(bridge_router_t *router, bridge_rule_t *rule) {
+    if (!router || !rule || !rule->is_active)
+        return 0;
+
+    uint8_t src_buf[BRIDGE_MAX_DATA_SIZE] = {0};
+    double raw_val = 0.0;
+    if (!read_endpoint(router, &rule->src, rule->src_type, rule->data_size, src_buf, &raw_val)) {
+        rule->error_count++;
+        return -1;
+    }
+    const double final_val = scaled(rule, raw_val);
+
+    if (rule->sync_mode == BRIDGE_SYNC_ON_CHANGE && rule->has_last_data) {
+        if (rule->deadband > 0.0f && rule->src_type != BRIDGE_TYPE_RAW_BYTES) {
+            /* 不感帯は宛先の単位 (スケール変換後) で比べる */
+            if (fabs(final_val - rule->last_value) <= (double)rule->deadband)
+                return 0;
+        } else if (memcmp(rule->last_data, src_buf, rule->data_size) == 0) {
+            return 0;
+        }
     }
 
-    bool ok = write_endpoint(router, &rule->dst, rule->dst_type, dst_sz, dst_buf, final_val);
-    if (ok) {
-        memcpy(rule->last_data, src_buf, rule->data_size);
-        rule->has_last_data = true;
+    uint8_t dst_buf[BRIDGE_MAX_DATA_SIZE] = {0};
+    const size_t dst_sz = encode_value(rule, final_val, src_buf, dst_buf);
+    if (!write_endpoint(router, &rule->dst, rule->dst_type, dst_sz, dst_buf, final_val)) {
+        rule->error_count++;
+        return -1;
     }
-    return ok;
+    memcpy(rule->last_data, src_buf, rule->data_size);
+    rule->last_value = final_val;
+    rule->has_last_data = true;
+    rule->sync_count++;
+    return 1;
+}
+
+/* MQTT が送信元のルールは受信時 (bridge_router_on_mqtt_message) にだけ動く */
+static bool polled(const bridge_rule_t *rule) {
+    return rule->is_active && rule->src.proto != BRIDGE_PROTO_MQTT_TOPIC;
 }
 
 size_t bridge_router_sync_all(bridge_router_t *router) {
     if (!router)
         return 0;
     size_t count = 0;
-    for (size_t i = 0; i < router->rule_count; ++i) {
-        if (sync_rule(router, &router->rules[i])) {
+    for (size_t i = 0; i < router->rule_count; ++i)
+        if (polled(&router->rules[i]) && sync_rule(router, &router->rules[i]) > 0)
             count++;
-        }
-    }
     return count;
 }
 
@@ -447,28 +499,105 @@ size_t bridge_router_tick(bridge_router_t *router, uint32_t elapsed_ms) {
     if (!router)
         return 0;
     size_t count = 0;
-
     for (size_t i = 0; i < router->rule_count; ++i) {
         bridge_rule_t *rule = &router->rules[i];
-        if (!rule->is_active)
+        if (!polled(rule))
             continue;
-
         if (rule->sync_mode == BRIDGE_SYNC_PERIODIC) {
             rule->timer_ms += elapsed_ms;
-            if (rule->timer_ms >= rule->interval_ms) {
-                rule->timer_ms = 0;
-                if (sync_rule(router, rule)) {
-                    count++;
-                }
-            }
-        } else if (rule->sync_mode == BRIDGE_SYNC_ON_CHANGE ||
-                   rule->sync_mode == BRIDGE_SYNC_ALWAYS) {
-            if (sync_rule(router, rule)) {
-                count++;
-            }
+            if (rule->interval_ms != 0 && rule->timer_ms < rule->interval_ms)
+                continue;
+            /* 周期の位相を保つ。遅れて呼ばれても 1 回だけ転送する */
+            rule->timer_ms = rule->interval_ms ? rule->timer_ms % rule->interval_ms : 0;
         }
+        if (sync_rule(router, rule) > 0)
+            count++;
     }
+    return count;
+}
 
+bool bridge_router_set_rule_active(bridge_router_t *router, int index, bool active) {
+    if (!router || index < 0 || (size_t)index >= router->rule_count)
+        return false;
+    bridge_rule_t *rule = &router->rules[index];
+    if (active && !rule->is_active) {
+        rule->has_last_data = false; /* 再開時は最初の値を必ず転送する */
+        rule->timer_ms = 0;
+    }
+    rule->is_active = active;
+    return true;
+}
+
+const bridge_rule_t *bridge_router_get_rule(const bridge_router_t *router, int index) {
+    if (!router || index < 0 || (size_t)index >= router->rule_count)
+        return NULL;
+    return &router->rules[index];
+}
+
+static bool parse_number(const void *payload, size_t len, double *out) {
+    char text[32];
+    if (!payload || len == 0 || len >= sizeof(text))
+        return false;
+    memcpy(text, payload, len);
+    text[len] = '\0';
+    char *p = text;
+    while (isspace((unsigned char)*p))
+        ++p;
+    char *end = p + strlen(p);
+    while (end > p && isspace((unsigned char)end[-1]))
+        *--end = '\0';
+    for (char *c = p; *c; ++c)
+        *c = (char)tolower((unsigned char)*c);
+    if (strcmp(p, "true") == 0 || strcmp(p, "on") == 0) {
+        *out = 1.0;
+        return true;
+    }
+    if (strcmp(p, "false") == 0 || strcmp(p, "off") == 0) {
+        *out = 0.0;
+        return true;
+    }
+    char *stop = NULL;
+    const double v = strtod(p, &stop);
+    if (stop == p || *stop != '\0' || v != v || v > 1e300 || v < -1e300)
+        return false;
+    *out = v;
+    return true;
+}
+
+size_t bridge_router_on_mqtt_message(bridge_router_t *router, const char *topic,
+                                     const void *payload, size_t payload_len) {
+    if (!router || !topic || (!payload && payload_len))
+        return 0;
+    size_t count = 0;
+    for (size_t i = 0; i < router->rule_count; ++i) {
+        bridge_rule_t *rule = &router->rules[i];
+        if (!rule->is_active || rule->src.proto != BRIDGE_PROTO_MQTT_TOPIC ||
+            strncmp(rule->src.target.mqtt_topic, topic, BRIDGE_MAX_TOPIC_LEN) != 0)
+            continue;
+        uint8_t src_buf[BRIDGE_MAX_DATA_SIZE] = {0};
+        double raw = 0.0;
+        if (rule->src_type == BRIDGE_TYPE_RAW_BYTES) {
+            if (payload_len != rule->data_size) {
+                rule->error_count++;
+                continue;
+            }
+            memcpy(src_buf, payload, payload_len);
+        } else if (!parse_number(payload, payload_len, &raw)) {
+            rule->error_count++;
+            continue;
+        }
+        const double final_val = scaled(rule, raw);
+        uint8_t dst_buf[BRIDGE_MAX_DATA_SIZE] = {0};
+        const size_t dst_sz = encode_value(rule, final_val, src_buf, dst_buf);
+        if (!write_endpoint(router, &rule->dst, rule->dst_type, dst_sz, dst_buf, final_val)) {
+            rule->error_count++;
+            continue;
+        }
+        rule->last_value = final_val;
+        rule->has_last_data = true;
+        rule->sync_count++;
+        count++;
+    }
     return count;
 }
 

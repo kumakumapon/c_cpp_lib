@@ -95,3 +95,44 @@ int main() {
 # テスト実行
 ctest --test-dir build -R test_bridge --output-on-failure
 ```
+
+---
+
+## 🆕 不感帯・ルール管理・MQTT からの書き込み
+
+| 機能 | API / フィールド | 内容 |
+| --- | --- | --- |
+| 不感帯 | `bridge_rule_t.deadband` | `BRIDGE_SYNC_ON_CHANGE` で、前回転送値との差 (スケール変換後の宛先の単位) がこれ以下なら転送しない |
+| 有効 / 無効 | `bridge_router_set_rule_active` | 再開時は値が同じでも 1 回転送 |
+| 統計 | `bridge_router_get_rule` → `sync_count` / `error_count` | 読み出し・書き込み失敗を数える (ゲートウェイの診断用) |
+| MQTT → 機器 | `bridge_router_on_mqtt_message` | 送信元が MQTT トピックのルールに、受信ペイロード (数値テキスト / true・false・on・off) を流す |
+
+```c
+/* クラウドから設定温度を受け、Modbus レジスタ 10 へ 0.1 ℃ 単位で書く */
+bridge_rule_t sp = {0};
+sp.src.proto = BRIDGE_PROTO_MQTT_TOPIC;
+strcpy(sp.src.target.mqtt_topic, "plant/setpoint");
+sp.src_type = BRIDGE_TYPE_FLOAT;
+sp.dst.proto = BRIDGE_PROTO_MODBUS_REG;
+sp.dst.target.modbus_addr = 10;
+sp.dst_type = BRIDGE_TYPE_UINT16;
+sp.scale = 10.0f;
+bridge_router_add_rule(&router, &sp);
+
+void on_message(mqtt_client_t *c, const mqtt_message_t *m, void *user) {
+    bridge_router_on_mqtt_message(&router, m->topic, m->payload, m->payload_len);
+}
+```
+
+送信元が MQTT のルールは `sync_all` / `tick` では読みません (受信時だけ動きます)。
+
+### 修正した不具合
+
+- 宛先が Modbus で型が BOOL のとき、何も書かずに成功を返していた → 0 / 1 を書く。
+- `BRIDGE_TYPE_RAW_BYTES` が `data_size` に関係なく 2 バイトしかコピーしなかった → `data_size` バイトをコピー
+  (生バイトと数値型の混在、長さ 0 は登録時に拒否)。Modbus へは 1 レジスタ 2 バイト (上位が先)。
+- 周期ルールのタイマを 0 に戻していたため、呼び出し間隔の端数だけ周期がずれていった → 位相を保持。
+- EtherNet/IP のアセンブリを超える書き込みが、黙って切り捨てられて成功扱いだった → 失敗。
+- CANopen の OD を長さの違う型で読むと、先頭バイトだけを読んでいた → 長さが一致しなければ失敗。
+
+`test_bridge_spec` で各エンドポイントの変換と、上記の回帰を固定しています。

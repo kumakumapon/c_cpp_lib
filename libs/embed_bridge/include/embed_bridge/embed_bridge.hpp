@@ -102,6 +102,33 @@ class Router {
         return bridge_router_add_rule(&router_, &rule);
     }
 
+    /** MQTT トピックの数値テキストを Modbus 保持レジスタへ書く (例: クラウドからの設定値) */
+    int map_mqtt_to_modbus(const std::string &topic, uint16_t modbus_addr,
+                           bridge_data_type_t dst_type = BRIDGE_TYPE_UINT16, float scale = 1.0f,
+                           float offset = 0.0f) {
+        bridge_rule_t rule{};
+        rule.src.proto = BRIDGE_PROTO_MQTT_TOPIC;
+        std::strncpy(rule.src.target.mqtt_topic, topic.c_str(), sizeof(rule.src.target.mqtt_topic) - 1);
+        rule.src_type = BRIDGE_TYPE_FLOAT;
+        rule.dst.proto = BRIDGE_PROTO_MODBUS_REG;
+        rule.dst.target.modbus_addr = modbus_addr;
+        rule.dst_type = dst_type;
+        rule.scale = scale;
+        rule.offset = offset;
+        return bridge_router_add_rule(&router_, &rule);
+    }
+
+    /** 受信した MQTT メッセージを流す (mqtt_client の on_message から呼ぶ) */
+    size_t on_mqtt_message(const char *topic, const void *payload, size_t len) {
+        return bridge_router_on_mqtt_message(&router_, topic, payload, len);
+    }
+
+    bool set_rule_active(int index, bool active) {
+        return bridge_router_set_rule_active(&router_, index, active);
+    }
+
+    const bridge_rule_t *rule(int index) const { return bridge_router_get_rule(&router_, index); }
+
     size_t sync_all() { return bridge_router_sync_all(&router_); }
 
     size_t tick(uint32_t elapsed_ms) { return bridge_router_tick(&router_, elapsed_ms); }
