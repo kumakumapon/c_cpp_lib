@@ -401,4 +401,130 @@ TEST_CASE(unbound_endpoints_fail) {
     CHECK(bridge_router_add_rule(nullptr, nullptr) < 0);
 }
 
+TEST_CASE(boundaries_of_registers_rules_and_values) {
+    uint16_t regs[4] = {};
+    bridge_router_t r;
+    bridge_router_init(&r);
+    bridge_router_bind_modbus(&r, regs, 4);
+    uint32_t big = 0x11223344u, back = 0;
+    // 32bit は最後から 2 番目のレジスタまで置ける
+    auto ok = rule(raw(&big), BRIDGE_TYPE_UINT32, modbus(2), BRIDGE_TYPE_UINT32);
+    auto edge = rule(raw(&big), BRIDGE_TYPE_UINT32, modbus(3), BRIDGE_TYPE_UINT32);
+    auto beyond = rule(raw(&big), BRIDGE_TYPE_UINT16, modbus(4), BRIDGE_TYPE_UINT16);
+    REQUIRE(bridge_router_add_rule(&r, &ok) >= 0);
+    int e = bridge_router_add_rule(&r, &edge);
+    int b = bridge_router_add_rule(&r, &beyond);
+    CHECK_EQ(bridge_router_sync_all(&r), 1u);
+    CHECK_EQ(regs[2], 0x1122u);
+    CHECK_EQ(regs[3], 0x3344u);
+    CHECK_EQ(bridge_router_get_rule(&r, e)->error_count, 1u);
+    CHECK_EQ(bridge_router_get_rule(&r, b)->error_count, 1u);
+    auto rd = rule(modbus(2), BRIDGE_TYPE_UINT32, raw(&back), BRIDGE_TYPE_UINT32);
+    auto rd_edge = rule(modbus(3), BRIDGE_TYPE_UINT32, raw(&back), BRIDGE_TYPE_UINT32);
+    bridge_router_t r2;
+    bridge_router_init(&r2);
+    bridge_router_bind_modbus(&r2, regs, 4);
+    REQUIRE(bridge_router_add_rule(&r2, &rd) >= 0);
+    int re = bridge_router_add_rule(&r2, &rd_edge);
+    CHECK_EQ(bridge_router_sync_all(&r2), 1u);
+    CHECK_EQ(back, 0x11223344u);
+    CHECK_EQ(bridge_router_get_rule(&r2, re)->error_count, 1u);
+    // ルール数の上限
+    bridge_router_t full;
+    bridge_router_init(&full);
+    uint16_t v = 0, o = 0;
+    auto x = rule(raw(&v), BRIDGE_TYPE_UINT16, raw(&o), BRIDGE_TYPE_UINT16);
+    for (int i = 0; i < BRIDGE_MAX_RULES; ++i)
+        CHECK_EQ(bridge_router_add_rule(&full, &x), i);
+    CHECK_EQ(bridge_router_add_rule(&full, &x), -1);
+    CHECK(bridge_router_get_rule(&full, BRIDGE_MAX_RULES - 1) != nullptr);
+    CHECK(bridge_router_get_rule(&full, BRIDGE_MAX_RULES) == nullptr);
+    CHECK(bridge_router_set_rule_active(&full, BRIDGE_MAX_RULES - 1, false));
+    CHECK(!bridge_router_set_rule_active(&full, BRIDGE_MAX_RULES, false));
+    // スケールとオフセットの加算 (offset は加える)
+    float f = 10.0f, out = 0;
+    auto sc = rule(raw(&f), BRIDGE_TYPE_FLOAT, raw(&out), BRIDGE_TYPE_FLOAT);
+    sc.scale = 2.0f;
+    sc.offset = 5.0f;
+    bridge_router_t r3;
+    bridge_router_init(&r3);
+    REQUIRE(bridge_router_add_rule(&r3, &sc) >= 0);
+    bridge_router_sync_all(&r3);
+    CHECK_EQ(out, 25.0f);
+    // 飽和の境界: int16 の上限ちょうどと +1
+    int32_t src = 32767;
+    int16_t d16 = 0;
+    auto sat = rule(raw(&src), BRIDGE_TYPE_INT32, raw(&d16), BRIDGE_TYPE_INT16);
+    bridge_router_t r4;
+    bridge_router_init(&r4);
+    REQUIRE(bridge_router_add_rule(&r4, &sat) >= 0);
+    bridge_router_sync_all(&r4);
+    CHECK_EQ(d16, 32767);
+    src = 32768;
+    bridge_router_sync_all(&r4);
+    CHECK_EQ(d16, 32767);
+    src = -32768;
+    bridge_router_sync_all(&r4);
+    CHECK_EQ(d16, -32768);
+    // 0 以外はすべて BOOL の true (0.5 も)
+    float tiny = 0.5f;
+    uint8_t flag = 0;
+    auto bo = rule(raw(&tiny), BRIDGE_TYPE_FLOAT, raw(&flag), BRIDGE_TYPE_BOOL);
+    bridge_router_t r5;
+    bridge_router_init(&r5);
+    REQUIRE(bridge_router_add_rule(&r5, &bo) >= 0);
+    bridge_router_sync_all(&r5);
+    CHECK_EQ(flag, 1u);
+    tiny = 0.0f;
+    bridge_router_sync_all(&r5);
+    CHECK_EQ(flag, 0u);
+}
+
+TEST_CASE(mqtt_number_parsing_edges) {
+    uint16_t regs[2] = {};
+    bridge_router_t r;
+    bridge_router_init(&r);
+    bridge_router_bind_modbus(&r, regs, 2);
+    auto a = rule(mqtt("t"), BRIDGE_TYPE_FLOAT, modbus(0), BRIDGE_TYPE_UINT16);
+    REQUIRE(bridge_router_add_rule(&r, &a) >= 0);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", "  7  ", 5), 1u); // 前後の空白
+    CHECK_EQ(regs[0], 7u);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", "1e300", 5), 1u); // 範囲内の最大近辺は飽和
+    CHECK_EQ(regs[0], 65535u);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", "1e301", 5), 0u);  // 範囲外は拒否
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", "-1e301", 6), 0u);
+    std::string s31(31, '1'), s32(32, '1'); // 31 文字までを受理、32 文字以上は拒否
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", s31.c_str(), 31), 1u);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", s32.c_str(), 32), 0u);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", "  ", 2), 0u);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", "TRUE", 4), 1u); // 大文字小文字を区別しない
+    CHECK_EQ(regs[0], 1u);
+    CHECK_EQ(bridge_router_on_mqtt_message(&r, "t", nullptr, 3), 0u);
+}
+
+TEST_CASE(modbus_slave_binding_and_register_bounds) {
+    uint16_t regs[4] = {1, 2, 3, 4};
+    bridge_router_t r;
+    bridge_router_init(&r);
+    modbus_slave_t slave{};
+    CHECK(!bridge_router_init_modbus_slave(&r, &slave, 1)); // レジスタ未バインド
+    bridge_router_bind_modbus(&r, regs, 4);
+    CHECK(!bridge_router_init_modbus_slave(&r, &slave, 0));
+    CHECK(!bridge_router_init_modbus_slave(&r, &slave, 248));
+    CHECK(bridge_router_init_modbus_slave(&r, &slave, 247));
+    CHECK(bridge_router_init_modbus_slave(&r, &slave, 1));
+    uint16_t out[4] = {};
+    CHECK_EQ(slave.callbacks.read_holding_registers(0, 4, out, slave.user_data), MODBUS_EX_NONE);
+    CHECK_EQ(out[3], 4u);
+    CHECK_EQ(slave.callbacks.read_holding_registers(3, 1, out, slave.user_data), MODBUS_EX_NONE);
+    CHECK_EQ(slave.callbacks.read_holding_registers(3, 2, out, slave.user_data), MODBUS_EX_ILLEGAL_DATA_ADDRESS);
+    CHECK_EQ(slave.callbacks.read_holding_registers(4, 0, out, slave.user_data), MODBUS_EX_NONE);
+    CHECK_EQ(slave.callbacks.read_holding_registers(5, 0, out, slave.user_data), MODBUS_EX_ILLEGAL_DATA_ADDRESS);
+    const uint16_t w[2] = {9, 9};
+    CHECK_EQ(slave.callbacks.write_holding_registers(2, 2, w, slave.user_data), MODBUS_EX_NONE);
+    CHECK_EQ(regs[3], 9u);
+    CHECK_EQ(slave.callbacks.write_holding_registers(3, 2, w, slave.user_data), MODBUS_EX_ILLEGAL_DATA_ADDRESS);
+    CHECK_EQ(slave.callbacks.write_holding_registers(5, 0, w, slave.user_data), MODBUS_EX_ILLEGAL_DATA_ADDRESS);
+}
+
 EMBED_TEST_MAIN()

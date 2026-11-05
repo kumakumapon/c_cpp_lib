@@ -314,4 +314,88 @@ TEST_CASE(limits_and_validation) {
     CHECK_EQ(embed_nvparam_capacity(nullptr), 0u);
 }
 
+TEST_CASE(sizes_around_the_chunk_boundary) {
+    // 内部の 64 バイト単位の処理の境界 (63/64/65/127/128/129) と書き込み単位の端数
+    for (size_t align : {size_t(1), size_t(4), size_t(8)}) {
+        for (size_t len : {size_t(0), size_t(1), size_t(7), size_t(63), size_t(64), size_t(65), size_t(127),
+                           size_t(128), size_t(129), size_t(200)}) {
+            SimFlash sim;
+            auto f = geometry(sim, 256, align);
+            embed_nvparam_t nv;
+            REQUIRE(embed_nvparam_init(&nv, &f, 5));
+            std::vector<uint8_t> data(len);
+            for (size_t i = 0; i < len; ++i)
+                data[i] = (uint8_t)(i * 31 + 7);
+            REQUIRE_EQ(embed_nvparam_save(&nv, data.data(), len), EMBED_NVPARAM_OK);
+            CHECK(!sim.misaligned);
+            embed_nvparam_t boot;
+            REQUIRE(embed_nvparam_init(&boot, &f, 5));
+            std::vector<uint8_t> got(len + 1, 0xEE);
+            REQUIRE_EQ(embed_nvparam_load(&boot, got.data(), len), EMBED_NVPARAM_OK);
+            CHECK_EQ(got[len], 0xEEu); // 範囲外へ書かない
+            if (len)
+                CHECK_MEM_EQ(got.data(), data.data(), len);
+            // 末尾 1 ビットの化けは必ず検出して「空」になる (データの全長が CRC の対象)
+            if (len) {
+                sim.mem[f.bank_addr[0] + ((16 + align - 1) / align * align) + len - 1] ^= 1;
+                embed_nvparam_t bad;
+                REQUIRE(embed_nvparam_init(&bad, &f, 5));
+                CHECK_EQ(embed_nvparam_load(&bad, got.data(), len), EMBED_NVPARAM_EMPTY);
+            }
+        }
+    }
+}
+
+TEST_CASE(newest_wins_regardless_of_bank_and_bad_header_fields) {
+    SimFlash sim;
+    auto f = geometry(sim, 128, 4);
+    embed_nvparam_t nv;
+    REQUIRE(embed_nvparam_init(&nv, &f, 1));
+    Params a = make(1), b = make(2), c = make(3);
+    // バンク 0 に新しい記録 (seq 3)、バンク 1 に古い記録 (seq 2) を置く
+    REQUIRE_EQ(embed_nvparam_save(&nv, &a, sizeof(a)), EMBED_NVPARAM_OK); // bank0 seq1
+    REQUIRE_EQ(embed_nvparam_save(&nv, &b, sizeof(b)), EMBED_NVPARAM_OK); // bank1 seq2
+    REQUIRE_EQ(embed_nvparam_save(&nv, &c, sizeof(c)), EMBED_NVPARAM_OK); // bank0 seq3
+    embed_nvparam_t boot;
+    REQUIRE(embed_nvparam_init(&boot, &f, 1));
+    Params got{};
+    REQUIRE_EQ(embed_nvparam_load(&boot, &got, sizeof(got)), EMBED_NVPARAM_OK);
+    CHECK(same(got, c));
+    CHECK_EQ(boot.active, 0);
+    // 長さフィールドが容量を超える記録は無効 (CRC が正しくても)
+    sim.mem[f.bank_addr[0] + 6] = 0xFF;
+    sim.mem[f.bank_addr[0] + 7] = 0xFF;
+    embed_nvparam_t bad;
+    REQUIRE(embed_nvparam_init(&bad, &f, 1));
+    REQUIRE_EQ(embed_nvparam_load(&bad, &got, sizeof(got)), EMBED_NVPARAM_OK);
+    CHECK(same(got, b)); // 1 つ前に戻る
+    // マジックの 1 ビット化け
+    sim.mem[f.bank_addr[1]] ^= 0x01;
+    embed_nvparam_t dead;
+    REQUIRE(embed_nvparam_init(&dead, &f, 1));
+    CHECK_EQ(embed_nvparam_load(&dead, &got, sizeof(got)), EMBED_NVPARAM_EMPTY);
+    // 構成: バンクが隣接 (ちょうど bank_size 離れている) は可、1 バイト足りないと不可
+    embed_nvparam_flash_t g = f;
+    g.bank_addr[1] = g.bank_addr[0] + (uint32_t)g.bank_size;
+    CHECK(embed_nvparam_init(&nv, &g, 1));
+    g.bank_addr[1] -= 1;
+    CHECK(!embed_nvparam_init(&nv, &g, 1));
+    g = f;
+    std::swap(g.bank_addr[0], g.bank_addr[1]); // 順序が逆でも同じ判定
+    CHECK(embed_nvparam_init(&nv, &g, 1));
+    g.bank_size = 16 + 4; // ヘッダ + 1 単位ちょうど
+    CHECK(embed_nvparam_init(&nv, &g, 1));
+    CHECK_EQ(embed_nvparam_capacity(&nv), 4u);
+    g.bank_size = 16 + 4 - 4; // 1 単位足りない
+    CHECK(!embed_nvparam_init(&nv, &g, 1));
+    for (size_t a : {size_t(2), size_t(16), size_t(32)}) {
+        g = f;
+        g.write_align = a;
+        CHECK(embed_nvparam_init(&nv, &g, 1));
+    }
+    CHECK(embed_nvparam_load_raw(nullptr, nullptr, 0, nullptr) == EMBED_NVPARAM_INVALID);
+    CHECK(embed_nvparam_peek(nullptr, nullptr, nullptr) == EMBED_NVPARAM_INVALID);
+    CHECK(embed_nvparam_erase(nullptr) == EMBED_NVPARAM_INVALID);
+}
+
 EMBED_TEST_MAIN()

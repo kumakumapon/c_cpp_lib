@@ -1,18 +1,23 @@
 {
   "embed_bridge": {
-    "rate": 0.2763,
-    "killed": 21,
-    "valid": 76
+    "rate": 0.65,
+    "killed": 52,
+    "valid": 80
   },
   "embed_canopen": {
-    "rate": 0.4828,
-    "killed": 28,
-    "valid": 58
+    "rate": 0.5625,
+    "killed": 45,
+    "valid": 80
+  },
+  "embed_cli": {
+    "rate": 0.7595,
+    "killed": 60,
+    "valid": 79
   },
   "embed_crc": {
-    "rate": 0.8182,
-    "killed": 27,
-    "valid": 33
+    "rate": 0.9143,
+    "killed": 32,
+    "valid": 35
   },
   "embed_diag": {
     "rate": 1.0,
@@ -34,6 +39,11 @@
     "killed": 25,
     "valid": 25
   },
+  "embed_frame": {
+    "rate": 0.8413,
+    "killed": 53,
+    "valid": 63
+  },
   "embed_fsm": {
     "rate": 1.0,
     "killed": 39,
@@ -43,6 +53,16 @@
     "rate": 1.0,
     "killed": 81,
     "valid": 81
+  },
+  "embed_input": {
+    "rate": 0.8696,
+    "killed": 20,
+    "valid": 23
+  },
+  "embed_json": {
+    "rate": 0.5949,
+    "killed": 47,
+    "valid": 79
   },
   "embed_kinematics": {
     "rate": 1.0,
@@ -60,9 +80,9 @@
     "valid": 80
   },
   "embed_modbus_tcp": {
-    "rate": 0.4783,
-    "killed": 33,
-    "valid": 69
+    "rate": 0.8125,
+    "killed": 65,
+    "valid": 80
   },
   "embed_motion": {
     "rate": 0.7875,
@@ -73,6 +93,11 @@
     "rate": 1.0,
     "killed": 219,
     "valid": 219
+  },
+  "embed_nvparam": {
+    "rate": 0.575,
+    "killed": 46,
+    "valid": 80
   },
   "embed_opcua": {
     "rate": 1.0,
@@ -90,24 +115,24 @@
     "valid": 33
   },
   "embed_ringbuf": {
-    "rate": 1.0,
-    "killed": 34,
-    "valid": 34
+    "rate": 0.8919,
+    "killed": 66,
+    "valid": 74
   },
   "embed_sched": {
-    "rate": 0.4857,
-    "killed": 17,
-    "valid": 35
+    "rate": 0.7167,
+    "killed": 43,
+    "valid": 60
   },
   "embed_selftest": {
-    "rate": 0.6098,
-    "killed": 25,
-    "valid": 41
+    "rate": 0.8608,
+    "killed": 68,
+    "valid": 79
   },
   "uart_protocol": {
-    "rate": 0.4375,
-    "killed": 7,
-    "valid": 16
+    "rate": 0.9286,
+    "killed": 65,
+    "valid": 70
   },
   "uitron": {
     "rate": 1.0,

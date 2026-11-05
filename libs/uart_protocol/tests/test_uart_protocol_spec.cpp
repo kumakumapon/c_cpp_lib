@@ -225,7 +225,7 @@ TEST_CASE(randomized_noise_never_loses_frames) {
     for (size_t i = 0; i < sent.size(); ++i) {
         CHECK_EQ(cap.rx[i].seq, (uint8_t)i);
         CHECK_EQ(cap.rx[i].length, (uint16_t)sent[i].size());
-        CHECK(std::memcmp(cap.rx[i].payload, sent[i].data(), sent[i].size()) == 0);
+        CHECK(sent[i].empty() || std::memcmp(cap.rx[i].payload, sent[i].data(), sent[i].size()) == 0);
     }
 }
 

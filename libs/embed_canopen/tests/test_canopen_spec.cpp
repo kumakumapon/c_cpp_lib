@@ -656,4 +656,101 @@ TEST_CASE(cpp_wrapper_pdo_and_handle) {
     CHECK(sent.size() >= 2u);
 }
 
+TEST_CASE(pdo_virtual_object_sizes_and_subindexes) {
+    canopen_node_t n;
+    fresh(n);
+    // 通信パラメータ: sub0=最大サブインデックス(TPDO 5 / RPDO 2)、sub2=1 バイト、sub3/sub5=2 バイト
+    bytes_are(sdo(n, {0x40, 0x00, 0x18, 0x02, 0, 0, 0, 0}), {0x4F, 0x00, 0x18, 0x02, 254, 0, 0, 0});
+    bytes_are(sdo(n, {0x40, 0x00, 0x18, 0x03, 0, 0, 0, 0}), {0x4B, 0x00, 0x18, 0x03, 0, 0, 0, 0});
+    bytes_are(sdo(n, {0x40, 0x00, 0x18, 0x05, 0, 0, 0, 0}), {0x4B, 0x00, 0x18, 0x05, 0, 0, 0, 0});
+    abort_is(sdo(n, {0x40, 0x00, 0x18, 0x04, 0, 0, 0, 0}), 0x1800, 4, CANOPEN_SDO_ABORT_NO_SUBINDEX);
+    abort_is(sdo(n, {0x40, 0x00, 0x14, 0x03, 0, 0, 0, 0}), 0x1400, 3, CANOPEN_SDO_ABORT_NO_SUBINDEX); // RPDO に禁止時間はない
+    abort_is(sdo(n, {0x40, 0x00, 0x14, 0x05, 0, 0, 0, 0}), 0x1400, 5, CANOPEN_SDO_ABORT_NO_SUBINDEX);
+    // 4 本目までのインデックスが有効、5 本目は存在しない
+    bytes_are(sdo(n, {0x40, 0x03, 0x18, 0x02, 0, 0, 0, 0}), {0x4F, 0x03, 0x18, 0x02, 254, 0, 0, 0});
+    abort_is(sdo(n, {0x40, 0x04, 0x18, 0x02, 0, 0, 0, 0}), 0x1804, 2, CANOPEN_SDO_ABORT_NO_OBJECT);
+    // マッピングのサブインデックスは 8 まで
+    bytes_are(sdo(n, {0x40, 0x00, 0x1A, 0x08, 0, 0, 0, 0}), {0x43, 0x00, 0x1A, 0x08, 0, 0, 0, 0});
+    abort_is(sdo(n, {0x40, 0x00, 0x1A, 0x09, 0, 0, 0, 0}), 0x1A00, 9, CANOPEN_SDO_ABORT_NO_SUBINDEX);
+    abort_is(sdo(n, {0x23, 0x00, 0x1A, 0x09, 0, 0, 0, 0}), 0x1A00, 9, CANOPEN_SDO_ABORT_NO_SUBINDEX);
+    // 通信パラメータの書き込み長
+    abort_is(sdo(n, {0x2B, 0x00, 0x18, 0x02, 1, 0, 0, 0}), 0x1800, 2, CANOPEN_SDO_ABORT_LENGTH_HIGH);
+    abort_is(sdo(n, {0x2F, 0x00, 0x18, 0x03, 1, 0, 0, 0}), 0x1800, 3, CANOPEN_SDO_ABORT_LENGTH_LOW);
+    abort_is(sdo(n, {0x2F, 0x00, 0x18, 0x05, 1, 0, 0, 0}), 0x1800, 5, CANOPEN_SDO_ABORT_LENGTH_LOW);
+    // イベントタイマは有効なままでも変更できる
+    sdo(n, {0x2B, 0x00, 0x18, 0x05, 0x64, 0x00, 0, 0});
+    CHECK_EQ(n.tpdo[0].event_timer_ms, 100u);
+    // 起動時にイベント種別・マッピングありの TPDO を設定して Operational へ入るまで何も送らない
+    uint8_t v = 1;
+    canopen_od_add_entry(&n.od, 0x2000, 0, OD_TYPE_UINT8, OD_ACCESS_RW, &v, 1);
+    const canopen_pdo_map_entry_t map[] = {{0x2000, 0, 8}};
+    REQUIRE(canopen_node_config_tpdo(&n, 4, map, 1, 255, 0));
+    CHECK_EQ(canopen_node_tx_pending(&n), 0u);
+    // 64bit ちょうど (8 バイト) は可、9 バイト目は不可
+    uint64_t q[2] = {0x0102030405060708ull, 0};
+    canopen_od_add_entry(&n.od, 0x2100, 0, OD_TYPE_UINT64, OD_ACCESS_RW, &q[0], 8);
+    canopen_od_add_entry(&n.od, 0x2101, 0, OD_TYPE_UINT8, OD_ACCESS_RW, &v, 1);
+    const canopen_pdo_map_entry_t full[] = {{0x2100, 0, 64}};
+    const canopen_pdo_map_entry_t over[] = {{0x2100, 0, 64}, {0x2101, 0, 8}};
+    CHECK(canopen_node_config_tpdo(&n, 2, full, 1, 1, 0));
+    CHECK(!canopen_node_config_tpdo(&n, 3, over, 2, 1, 0));
+    start(n);
+    auto out = feed(n, frame(0x080, {}));
+    bool saw = false;
+    for (auto &f : out)
+        if (f.id == 0x285) {
+            bytes_are(f, {0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01});
+            saw = true;
+        }
+    CHECK(saw);
+}
+
+TEST_CASE(sdo_size_less_expedited_and_od_capacity) {
+    canopen_node_t n;
+    fresh(n);
+    uint8_t one = 0;
+    uint16_t two = 0;
+    canopen_od_add_entry(&n.od, 0x2000, 0, OD_TYPE_UINT8, OD_ACCESS_RW, &one, 1);
+    canopen_od_add_entry(&n.od, 0x2001, 0, OD_TYPE_UINT16, OD_ACCESS_RW, &two, 2);
+    // サイズ指定なし: 1 バイトと 2 バイトのオブジェクトは本来の長さで書く
+    sdo(n, {0x22, 0x00, 0x20, 0x00, 0x7B, 0xFF, 0xFF, 0xFF});
+    CHECK_EQ(one, 0x7Bu);
+    sdo(n, {0x22, 0x01, 0x20, 0x00, 0x34, 0x12, 0xFF, 0xFF});
+    CHECK_EQ(two, 0x1234u);
+    // 加速型 n ビットの全値: n=3 は 1 バイト、n=2 は 2 バイト
+    sdo(n, {0x2F, 0x00, 0x20, 0x00, 0x05, 0, 0, 0});
+    CHECK_EQ(one, 5u);
+    sdo(n, {0x2B, 0x01, 0x20, 0x00, 0x06, 0x00, 0, 0});
+    CHECK_EQ(two, 6u);
+    // 既存の 9 件 + 追加で OD の上限 (CANOPEN_MAX_OD_ENTRIES) ちょうどまで入る
+    canopen_od_t od;
+    canopen_od_init(&od);
+    uint8_t cell[CANOPEN_MAX_OD_ENTRIES + 1];
+    for (int i = 0; i < CANOPEN_MAX_OD_ENTRIES; ++i)
+        CHECK(canopen_od_add_entry(&od, 0x3000, (uint8_t)i, OD_TYPE_UINT8, OD_ACCESS_RW, &cell[i], 1));
+    CHECK(!canopen_od_add_entry(&od, 0x3001, 0, OD_TYPE_UINT8, OD_ACCESS_RW, &cell[0], 1));
+    CHECK(canopen_od_add_entry(&od, 0x3000, 0, OD_TYPE_UINT16, OD_ACCESS_RW, &cell[0], 1)); // 置き換えは可
+    CHECK(canopen_od_find_entry(&od, 0x3000, CANOPEN_MAX_OD_ENTRIES - 1) != nullptr);
+    CHECK(canopen_od_find_entry(&od, 0x3000, CANOPEN_MAX_OD_ENTRIES) == nullptr);
+    // 読み出しバッファ境界
+    uint32_t dev = 0;
+    size_t len = 0;
+    uint8_t buf[4];
+    CHECK_EQ(canopen_node_sdo_read(&n, 0x1000, 0, buf, 4, &len), 0u);
+    CHECK_EQ(canopen_node_sdo_read(&n, 0x1000, 0, buf, 3, &len), CANOPEN_SDO_ABORT_OUT_OF_MEMORY);
+    CHECK_EQ(canopen_node_sdo_read(&n, 0x1000, 0, nullptr, 4, &len), CANOPEN_SDO_ABORT_GENERAL);
+    CHECK_EQ(canopen_node_sdo_write(&n, 0x2000, 0, nullptr, 1), CANOPEN_SDO_ABORT_GENERAL);
+    CHECK_EQ(canopen_node_sdo_write(nullptr, 0x2000, 0, buf, 1), CANOPEN_SDO_ABORT_GENERAL);
+    (void)dev;
+    // デバイス名は NUL を含まない長さ (31 文字まで)
+    canopen_node_t nm;
+    canopen_node_init(&nm, 3, "0123456789012345678901234567890123456789");
+    drain(nm);
+    CHECK_EQ(strlen(nm.device_name), 31u);
+    size_t nlen = 0;
+    uint8_t big[64];
+    CHECK_EQ(canopen_node_sdo_read(&nm, 0x1008, 0, big, sizeof(big), &nlen), 0u);
+    CHECK_EQ(nlen, 31u);
+}
+
 EMBED_TEST_MAIN()

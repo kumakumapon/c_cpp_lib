@@ -268,4 +268,140 @@ TEST_CASE(round_trip_writer_to_parser) {
     CHECK_EQ(v, 123456789012345);
 }
 
+TEST_CASE(utf8_boundaries_and_surrogates) {
+    struct Case { const char *js; const char *utf8; };
+    const Case cases[] = {
+        {"\"\\u007f\"", "\x7f"},             // 1 バイトの上限
+        {"\"\\u0080\"", "\xC2\x80"},         // 2 バイトの下限
+        {"\"\\u07ff\"", "\xDF\xBF"},         // 2 バイトの上限
+        {"\"\\u0800\"", "\xE0\xA0\x80"},     // 3 バイトの下限
+        {"\"\\uD7FF\"", "\xED\x9F\xBF"},     // サロゲートの直前
+        {"\"\\uD800\\uDC00\"", "\xF0\x90\x80\x80"}, // 最小のペア
+        {"\"\\uDBFF\\uDFFF\"", "\xF4\x8F\xBF\xBF"}, // 最大のペア
+        {"\"\\uD800\"", "\xEF\xBF\xBD"},     // 上位だけ: U+FFFD
+        {"\"\\uD800x\"", "\xEF\xBF\xBD" "x"},
+        {"\"\\uD800\\u0041\"", "\xEF\xBF\xBD" "A"}, // 上位 + 下位でない
+        {"\"\\uDC00\"", "\xEF\xBF\xBD"},     // 下位だけ
+        {"\"\\uDFFF\"", "\xEF\xBF\xBD"},
+        {"\"\\uabCD\"", "\xEA\xAF\x8D"},     // 16 進の大文字小文字
+        {"\"\\uAbcD\"", "\xEA\xAF\x8D"},
+    };
+    for (const auto &c : cases) {
+        embed_json_token_t t[2];
+        REQUIRE(parse(c.js, t, 2) == 1);
+        char out[16];
+        REQUIRE(embed_json_get_string(c.js, &t[0], out, sizeof(out)));
+        if (!CHECK_STR_EQ(out, c.utf8))
+            std::printf("# input: %s\n", c.js);
+    }
+    // 16 進の境界文字 (0-9 a-f A-F の外側は不正)
+    for (const char *bad : {"\"\\u00g0\"", "\"\\u00G0\"", "\"\\u00/0\"", "\"\\u00:0\"", "\"\\u00@0\"", "\"\\u00`0\""})
+        CHECK_EQ(parse(bad, nullptr, 0) < 0 ? 1 : 0, 1);
+    embed_json_token_t t[2];
+    CHECK_EQ(parse("\"\\u004\"", t, 2), EMBED_JSON_ERR_INVALID);
+    CHECK_EQ(parse("\"\\u00", t, 2), EMBED_JSON_ERR_PARTIAL);
+}
+
+TEST_CASE(output_capacity_exact_boundaries) {
+    embed_json_token_t t[2];
+    const char *js = "\"abc\\n\"";
+    REQUIRE(parse(js, t, 2) == 1);
+    char out[8];
+    CHECK(embed_json_get_string(js, &t[0], out, 5));   // "abc\n" + NUL = 5
+    CHECK(!embed_json_get_string(js, &t[0], out, 4));
+    CHECK(!embed_json_get_string(js, &t[0], out, 0));
+    const char *mb = "\"\\u00e9\"";                     // 2 バイト + NUL
+    REQUIRE(parse(mb, t, 2) == 1);
+    CHECK(embed_json_get_string(mb, &t[0], out, 3));
+    CHECK(!embed_json_get_string(mb, &t[0], out, 2));
+    const char *pair = "\"\\ud83d\\ude00\"";            // 4 バイト + NUL
+    REQUIRE(parse(pair, t, 2) == 1);
+    CHECK(embed_json_get_string(pair, &t[0], out, 5));
+    CHECK(!embed_json_get_string(pair, &t[0], out, 4));
+}
+
+TEST_CASE(number_forms_and_double_length_limit) {
+    const char *valid[] = {"0.5", "10", "1e5", "1E+5", "1e-5", "0e0", "-0.0", "123456789012", "1.25e10"};
+    for (const char *js : valid) {
+        embed_json_token_t t[2];
+        REQUIRE(parse(js, t, 2) == 1);
+        double d = 0;
+        CHECK(embed_json_get_double(js, &t[0], &d));
+        CHECK_EQ(t[0].end - t[0].start, (uint32_t)std::strlen(js));
+    }
+    embed_json_token_t t[2];
+    double d = 0;
+    CHECK_EQ(parse("12e", t, 2), EMBED_JSON_ERR_PARTIAL);
+    CHECK_EQ(parse("12e+", t, 2), EMBED_JSON_ERR_PARTIAL);
+    CHECK_EQ(parse("12ex", t, 2), EMBED_JSON_ERR_INVALID);
+    CHECK_EQ(parse("-", t, 2), EMBED_JSON_ERR_PARTIAL);
+    CHECK_EQ(parse("-x", t, 2), EMBED_JSON_ERR_INVALID);
+    // 63 文字の数値は読める、64 文字は拒否 (内部バッファの長さ)
+    std::string n63 = "1" + std::string(62, '0'), n64 = "1" + std::string(63, '0');
+    REQUIRE_EQ(parse(n63.c_str(), t, 2), 1);
+    CHECK(embed_json_get_double(n63.c_str(), &t[0], &d));
+    REQUIRE_EQ(parse(n64.c_str(), t, 2), 1);
+    CHECK(!embed_json_get_double(n64.c_str(), &t[0], &d));
+    CHECK(!embed_json_get_double("\"1\"", &t[0], &d));
+    // INT64_MIN の符号
+    const char *mn = "-9223372036854775807";
+    int64_t v = 0;
+    REQUIRE_EQ(parse(mn, t, 2), 1);
+    CHECK(embed_json_get_int(mn, &t[0], &v));
+    CHECK_EQ(v, INT64_MIN + 1);
+}
+
+TEST_CASE(lookup_edge_cases) {
+    const char *js = "[[1,2],[3],{\"a\":1}]";
+    embed_json_token_t t[16];
+    const int n = parse(js, t, 16);
+    REQUIRE(n > 0);
+    // 配列の要素は直接の子だけを数える (入れ子の要素を飛ばす)
+    int second = embed_json_array_get(t, n, 0, 1);
+    REQUIRE(second > 0);
+    CHECK_EQ(t[second].type, EMBED_JSON_ARRAY);
+    CHECK_EQ(t[second].size, 1u);
+    int third = embed_json_array_get(t, n, 0, 2);
+    REQUIRE(third > 0);
+    CHECK_EQ(t[third].type, EMBED_JSON_OBJECT);
+    CHECK_EQ(embed_json_array_get(t, n, 0, 3), -1);
+    CHECK_EQ(embed_json_array_get(t, n, n, 0), -1);     // 範囲外のトークン
+    CHECK_EQ(embed_json_array_get(t, n, -1, 0), -1);
+    CHECK_EQ(embed_json_array_get(t, n, third, 0), -1); // オブジェクトに配列検索はできない
+    CHECK_EQ(embed_json_array_get(nullptr, n, 0, 0), -1);
+    // オブジェクト検索: 値の文字列がキーと同じでも誤検出しない
+    const char *o = "{\"k\":\"x\",\"x\":2,\"z\":{\"k\":9}}";
+    const int m = parse(o, t, 16);
+    REQUIRE(m > 0);
+    const int x = embed_json_object_get(o, t, m, 0, "x");
+    REQUIRE(x > 0);
+    CHECK_EQ(t[x].type, EMBED_JSON_NUMBER);
+    int64_t v = 0;
+    CHECK(embed_json_get_int(o, &t[x], &v));
+    CHECK_EQ(v, 2);
+    CHECK_EQ(embed_json_object_get(o, t, m, m, "k"), -1);
+    CHECK_EQ(embed_json_object_get(o, t, m, 0, nullptr), -1);
+    CHECK_EQ(embed_json_object_get(nullptr, t, m, 0, "k"), -1);
+    CHECK(!embed_json_token_eq(o, &t[1], nullptr));
+    // キーなしの値・非 NULL 以外の誤用
+    char buf[32];
+    embed_json_writer_t w;
+    embed_json_writer_init(&w, buf, sizeof(buf));
+    embed_json_object_begin(&w);
+    CHECK(!embed_json_key(&w, nullptr));
+    embed_json_writer_init(&w, buf, sizeof(buf));
+    embed_json_array_begin(&w);
+    CHECK(!embed_json_string_n(&w, nullptr, 3));
+    embed_json_writer_init(&w, buf, sizeof(buf));
+    embed_json_array_begin(&w);
+    embed_json_fixed(&w, 1.0, 9);
+    embed_json_fixed(&w, 1.0, 10);  // 10 桁は 9 桁に丸める
+    embed_json_fixed(&w, 1.5, -1);  // 負は 0 桁
+    embed_json_array_end(&w);
+    CHECK_STR_EQ(embed_json_finish(&w, nullptr), "[1.000000000,1.000000000,2]");
+    embed_json_writer_init(&w, buf, sizeof(buf));
+    embed_json_string(&w, "\x1f\x20"); // 0x1f はエスケープ、0x20 は不要
+    CHECK_STR_EQ(embed_json_finish(&w, nullptr), "\"\\u001f \"");
+}
+
 EMBED_TEST_MAIN()
