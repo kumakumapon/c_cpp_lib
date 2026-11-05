@@ -1,0 +1,7 @@
+add_library(embed_nvparam src/embed_nvparam.c)
+target_include_directories(embed_nvparam PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_set_warnings(embed_nvparam)
+target_link_libraries(embed_nvparam PUBLIC embed_crc)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
