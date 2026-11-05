@@ -26,7 +26,8 @@ can_frame_t make(uint32_t id, std::initializer_list<uint8_t> bytes) {
     can_frame_t f{};
     f.id = id;
     f.len = (uint8_t)bytes.size();
-    std::memcpy(f.data, bytes.begin(), bytes.size());
+    if (bytes.size()) // 空の initializer_list の begin() は nullptr になりうる
+        std::memcpy(f.data, bytes.begin(), bytes.size());
     return f;
 }
 
